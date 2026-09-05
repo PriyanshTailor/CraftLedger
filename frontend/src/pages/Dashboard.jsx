@@ -7,21 +7,98 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, Lightbulb, 
   ArrowRight, ShieldCheck, PieChart, Info, ArrowUpRight, ArrowDownRight, Search
 } from 'lucide-react';
-import { getDashboardData } from '../services/dashboardService';
+import { dashboardService } from '../services/dashboardService';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { useAuth } from '../contexts/AuthContext';
+import { ROLES } from '../lib/roles';
 
 export function Dashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    getDashboardData().then(res => {
-      setData(res);
-      setLoading(false);
-    });
-  }, []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const res = user?.role === ROLES.ACCOUNTANT
+          ? await dashboardService.getAccountantSummary()
+          : await dashboardService.getSummary();
+        const bd = res.data; // backend data
+        
+        // Format currency helper
+        const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
+
+        // Adapt backend data to existing UI format
+        const adaptedData = {
+          healthScore: bd.health.score,
+          healthStatus: bd.health.status,
+          kpis: {
+            revenue: { value: formatCurrency(bd.metrics.revenue), change: bd.metrics.revenueTrend, comparison: 'vs last month' },
+            netProfit: { value: formatCurrency(bd.metrics.netProfit), change: bd.metrics.profitTrend, comparison: 'vs last month' },
+            cashAvailable: { value: formatCurrency(bd.metrics.availableCash), status: bd.cashFlowForecast.warning ? 'Warning' : 'Healthy' },
+            receivables: { value: formatCurrency(bd.metrics.receivables), subtext: 'Invoices due soon' },
+            payables: { value: formatCurrency(bd.metrics.payables), subtext: 'Upcoming bills' },
+            inventoryValue: { value: formatCurrency(bd.metrics.inventoryValue), subtext: 'Current stock' }
+          },
+          financialPerformance: bd.financialPerformance.map(fp => ({
+            name: fp.month,
+            revenue: fp.revenue / 100000, // Converting to Lakhs for chart if needed, or leave as is
+            profit: fp.profit / 100000,
+            expenses: (fp.revenue - fp.profit) / 100000
+          })),
+          // We don't have time-series cash flow forecast natively yet, generate mock based on backend scalar values
+          cashFlowForecast: [
+            { day: 'Day 0', cash: bd.cashFlowForecast.currentCash / 100000 },
+            { day: 'Day 30', cash: bd.cashFlowForecast.projectedCash / 100000 }
+          ],
+          aiInsights: bd.aiInsights || [],
+          profitLeaks: bd.profitLeaks.map((leak, idx) => ({
+            id: leak.relatedRecordId || idx,
+            category: leak.title,
+            amount: formatCurrency(leak.amount),
+            severity: leak.severity
+          })),
+          productProfitability: bd.productProfitability.map((p, idx) => ({
+            id: p.productId || idx,
+            name: p.name,
+            revenue: formatCurrency(p.revenue),
+            profit: formatCurrency(p.grossProfit),
+            margin: Math.round(p.marginPercentage)
+          })),
+          inventoryInsights: {
+            totalValue: formatCurrency(bd.metrics.inventoryValue),
+            lowStock: 0, // Mock for now
+            slowMoving: 0 // Mock for now
+          }
+        };
+
+        setData(adaptedData);
+        setLoading(false);
+      } catch (err) {
+        console.error("Dashboard error:", err);
+        setError("Failed to load dashboard data");
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [user?.role]);
+
+  if (loading) {
+    return <div className="flex h-64 items-center justify-center text-slate-500">Loading dashboard data...</div>;
+  }
+  
+  if (error) {
+    return (
+      <div className="flex flex-col h-64 items-center justify-center text-red-500 gap-4">
+        <p>{error}</p>
+        <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return <div className="flex h-64 items-center justify-center text-slate-500">Loading dashboard data...</div>;

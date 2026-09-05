@@ -1,12 +1,12 @@
-export const getBudgetData = async () => {
-  await new Promise(resolve => setTimeout(resolve, 400));
+import api from './api';
 
-  return {
-    budgets: [
-      { id: 1, name: 'Procurement Budget', period: 'Sep 2026', planned: 500000, actual: 600000, responsible: 'Rahul Sharma' },
-      { id: 2, name: 'Marketing Budget', period: 'Sep 2026', planned: 100000, actual: 82000, responsible: 'Priya Patel' },
-      { id: 3, name: 'Operations Budget', period: 'Sep 2026', planned: 200000, actual: 215000, responsible: 'Ankit Joshi' },
-      { id: 4, name: 'Salaries & HR', period: 'Sep 2026', planned: 350000, actual: 350000, responsible: 'HR Team' },
-    ]
-  };
+export const budgetService = {
+  getSummary: () => api.get('/budgets/summary'),
+  getBudgets: () => api.get('/budgets'),
+  getBudget: (id) => api.get(`/budgets/${id}`),
+  createBudget: (data) => api.post('/budgets', data),
+  updateBudget: (id, data) => api.patch(`/budgets/${id}`, data),
+  deleteBudget: (id) => api.delete(`/budgets/${id}`),
+  getActuals: (id) => api.get(`/budgets/${id}/actuals`),
+  getVariance: (id) => api.get(`/budgets/${id}/variance`)
 };

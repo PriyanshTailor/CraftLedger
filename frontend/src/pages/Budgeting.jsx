@@ -4,101 +4,134 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { FormField, Input, Select } from '../components/ui/FormField';
-import { Plus, AlertTriangle, TrendingUp } from 'lucide-react';
-import { getBudgetData } from '../services/budgetService';
+import { Plus, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react';
+import { budgetService } from '../services/budgetService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { cn } from '../lib/utils';
 
 function formatINR(value) {
+  if (value === 0) return '₹0';
   if (value >= 100000) return `₹${(value / 100000).toFixed(1)}L`;
   if (value >= 1000) return `₹${(value / 1000).toFixed(0)}K`;
   return `₹${value}`;
 }
 
-function CreateBudgetModal({ isOpen, onClose }) {
-  const [planned, setPlanned] = useState('');
+function CreateBudgetModal({ isOpen, onClose, onRefresh }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    periodStart: new Date().toISOString().split('T')[0],
+    periodEnd: '',
+    plannedAmount: '',
+    responsiblePerson: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      await budgetService.createBudget({
+        name: formData.name,
+        periodStart: formData.periodStart,
+        periodEnd: formData.periodEnd,
+        plannedAmount: Number(formData.plannedAmount),
+        responsiblePerson: formData.responsiblePerson,
+        status: 'active'
+      });
+      onRefresh();
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to create budget');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create New Budget" size="md">
-      <div className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField label="Budget Name" required className="md:col-span-2">
-            <Input placeholder="e.g. Procurement Budget Q3" />
+            <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="e.g. Procurement Budget Q3" />
           </FormField>
-          <FormField label="Period Type" required>
-            <Select>
-              <option>Monthly</option>
-              <option>Quarterly</option>
-              <option>Yearly</option>
-              <option>Custom</option>
-            </Select>
+          <FormField label="Start Date" required>
+            <Input type="date" value={formData.periodStart} onChange={e => setFormData({...formData, periodStart: e.target.value})} required />
           </FormField>
-          <FormField label="Start Month" required>
-            <Input type="month" defaultValue={new Date().toISOString().slice(0, 7)} />
-          </FormField>
-          <FormField label="Analytic Account">
-            <Select>
-              <option value="">Select account</option>
-              <option>Procurement</option>
-              <option>Marketing</option>
-              <option>Operations</option>
-              <option>HR & Salaries</option>
-              <option>IT & Tech</option>
-            </Select>
+          <FormField label="End Date" required>
+            <Input type="date" value={formData.periodEnd} onChange={e => setFormData({...formData, periodEnd: e.target.value})} required />
           </FormField>
           <FormField label="Responsible Person">
-            <Input placeholder="e.g. Rahul Sharma" />
+            <Input value={formData.responsiblePerson} onChange={e => setFormData({...formData, responsiblePerson: e.target.value})} placeholder="e.g. Rahul Sharma" />
           </FormField>
-          <FormField label="Planned Amount (₹)" required className="md:col-span-2">
+          <FormField label="Planned Amount (₹)" required>
             <Input
               type="number"
               min="0"
+              required
               placeholder="e.g. 500000"
-              value={planned}
-              onChange={e => setPlanned(e.target.value)}
+              value={formData.plannedAmount}
+              onChange={e => setFormData({...formData, plannedAmount: e.target.value})}
             />
           </FormField>
         </div>
 
-        {planned && (
+        {formData.plannedAmount && (
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
             <p className="text-xs font-semibold text-royal uppercase tracking-wide mb-1">Budget Summary</p>
             <p className="text-sm text-slate-700">
-              Planned budget: <span className="font-semibold text-navy">{formatINR(Number(planned))}</span>
+              Planned budget: <span className="font-semibold text-navy">{formatINR(Number(formData.plannedAmount))}</span>
             </p>
-            <p className="text-xs text-slate-500 mt-1">Monthly tracking will begin from your selected start month.</p>
+            <p className="text-xs text-slate-500 mt-1">Monthly tracking will begin from your selected start date.</p>
           </div>
         )}
 
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={onClose}>Create Budget</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button type="submit" disabled={submitting}>{submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Create Budget</Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
 
 export function Budgeting() {
-  const [data, setData] = useState(null);
+  const [budgets, setBudgets] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
+  const fetchBudgets = async () => {
+    try {
+      setLoading(true);
+      const res = await budgetService.getBudgets();
+      setBudgets(res.data);
+      setError(null);
+    } catch (err) {
+      setError("Failed to load budgets");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    getBudgetData().then(res => { setData(res); setLoading(false); });
+    fetchBudgets();
   }, []);
 
-  if (loading) return <div className="flex justify-center items-center h-64 text-slate-500">Loading budgets...</div>;
+  if (loading) return <div className="flex justify-center items-center h-64 text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2"/> Loading budgets...</div>;
+  if (error) return <div className="flex flex-col justify-center items-center h-64 text-red-500"><p>{error}</p><Button onClick={fetchBudgets} className="mt-4">Retry</Button></div>;
 
-  const chartData = data.budgets.map(b => ({
+  const chartData = budgets.map(b => ({
     name: b.name.replace(' Budget', '').replace(' & HR', ''),
-    Planned: b.planned / 100000,
-    Actual: b.actual / 100000,
+    Planned: (b.plannedAmount || 0) / 100000,
+    Actual: (b.actualAmount || 0) / 100000,
   }));
 
   return (
     <div className="space-y-6">
-      <CreateBudgetModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+      <CreateBudgetModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onRefresh={fetchBudgets} />
 
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
@@ -107,9 +140,9 @@ export function Budgeting() {
         </div>
         <div className="flex gap-3">
           <select className="border border-slate-200 rounded-md bg-white text-sm px-3 py-2 outline-none focus:ring-1 focus:ring-royal text-slate-700">
-            <option>September 2026</option>
-            <option>August 2026</option>
-            <option>Q3 2026</option>
+            <option>All Budgets</option>
+            <option>Active</option>
+            <option>Draft</option>
           </select>
           <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Budget</Button>
         </div>
@@ -118,16 +151,19 @@ export function Budgeting() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle>Budget vs Actual</CardTitle>
-          <CardDescription>Planned vs actual spend for the selected period.</CardDescription>
+          <CardDescription>Planned vs actual spend for active budgets.</CardDescription>
         </CardHeader>
         <CardContent>
+          {budgets.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No budgets found. Create one to get started.</div>
+          ) : (
           <div className="h-[280px] w-full mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barCategoryGap="30%">
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} tickFormatter={v => `₹${v}L`} />
-                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={value => [`₹${value}L`]} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={value => [`₹${Number(value).toFixed(2)}L`]} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '16px' }} />
                 <Bar dataKey="Planned" fill="#CBD5E1" radius={[4, 4, 0, 0]} maxBarSize={36} />
                 <Bar dataKey="Actual" radius={[4, 4, 0, 0]} maxBarSize={36}>
@@ -138,21 +174,24 @@ export function Budgeting() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )}
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {data.budgets.map(budget => {
-          const variance = budget.actual - budget.planned;
-          const variancePct = ((variance / budget.planned) * 100).toFixed(1);
+        {budgets.map(budget => {
+          const planned = budget.plannedAmount || 0;
+          const actual = budget.actualAmount || 0;
+          const variance = actual - planned;
+          const variancePct = planned > 0 ? ((variance / planned) * 100).toFixed(1) : 0;
           const isOver = variance > 0;
           return (
-            <Card key={budget.id} className={cn("hover:shadow-md transition-shadow", isOver && "border-red-200")}>
+            <Card key={budget._id} className={cn("hover:shadow-md transition-shadow", isOver && "border-red-200")}>
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-semibold text-navy">{budget.name}</h3>
-                    <p className="text-sm text-slate-500">{budget.period} · {budget.responsible}</p>
+                    <p className="text-sm text-slate-500">{new Date(budget.periodStart).toLocaleDateString()} - {new Date(budget.periodEnd).toLocaleDateString()} · {budget.responsiblePerson}</p>
                   </div>
                   {isOver
                     ? <Badge variant="destructive"><AlertTriangle className="w-3 h-3 mr-1" />Over Budget</Badge>
@@ -160,12 +199,12 @@ export function Budgeting() {
                 </div>
                 <div className="mb-4">
                   <div className="flex justify-between text-xs text-slate-500 mb-1.5">
-                    <span>Actual: <span className="font-semibold text-slate-700">{formatINR(budget.actual)}</span></span>
-                    <span>Planned: <span className="font-semibold text-slate-700">{formatINR(budget.planned)}</span></span>
+                    <span>Actual: <span className="font-semibold text-slate-700">{formatINR(actual)}</span></span>
+                    <span>Planned: <span className="font-semibold text-slate-700">{formatINR(planned)}</span></span>
                   </div>
                   <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
                     <div className={cn("h-full rounded-full transition-all", isOver ? "bg-red-500" : "bg-royal")}
-                      style={{ width: `${Math.min((budget.actual / budget.planned) * 100, 100)}%` }} />
+                      style={{ width: planned > 0 ? `${Math.min((actual / planned) * 100, 100)}%` : '0%' }} />
                   </div>
                 </div>
                 <div className={cn("text-sm font-medium", isOver ? "text-red-600" : "text-green-600")}>

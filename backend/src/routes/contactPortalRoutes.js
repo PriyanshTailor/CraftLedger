@@ -1,0 +1,21 @@
+import express from 'express';
+import { authenticateUser } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/roleMiddleware.js';
+import { ROLES } from '../config/roles.js';
+import * as portal from '../controllers/contactPortalController.js';
+
+const router = express.Router();
+router.use(authenticateUser, authorizeRoles(ROLES.CONTACT));
+router.get('/dashboard', portal.getDashboard);
+router.get('/profile', portal.getProfile);
+router.patch('/profile', portal.updateProfile);
+router.get('/invoices', portal.getInvoices);
+router.get('/invoices/:id', portal.getInvoice);
+router.get('/bills', portal.getBills);
+router.get('/bills/:id', portal.getBill);
+router.get('/payments', portal.getPayments);
+router.get('/payments/:id', portal.getPayment);
+router.get('/payments/:id/receipt', portal.getReceipt);
+router.post('/payments/simulate', portal.simulatePayment);
+router.get('/contract', portal.getContract);
+export default router;

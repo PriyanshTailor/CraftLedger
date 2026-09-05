@@ -3,28 +3,37 @@ import { Link } from 'react-router-dom';
 import { AuthLayout } from '../../components/layout/AuthLayout';
 import { Button } from '../../components/ui/Button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
+import { authService } from '../../services/authService';
 
 export function ForgotPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    // Mock API call
-    setTimeout(() => {
-      setIsLoading(false);
+    setError('');
+    
+    try {
+      await authService.forgotPassword({ email });
       setIsSent(true);
-    }, 1000);
+    } catch (err) {
+      setError(err.message || 'Failed to send reset link');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <AuthLayout title="Reset your password" subtitle="Enter your email and we'll send you a link to reset your password.">
       {!isSent ? (
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">Email Address</label>
-            <input type="email" required className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal transition-all" placeholder="you@company.com" />
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal transition-all" placeholder="you@company.com" />
           </div>
 
           <Button type="submit" className="w-full mt-4 h-11 bg-royal hover:bg-blue-700 text-white font-medium" disabled={isLoading}>
@@ -43,7 +52,7 @@ export function ForgotPassword() {
           </div>
           <h3 className="text-lg font-medium text-navy">Check your email</h3>
           <p className="text-slate-500 text-sm">
-            We sent a password reset link to your email.
+            We sent a password reset link to your email. (Check the terminal/network response if testing locally without an email server).
           </p>
           <Button asChild variant="outline" className="w-full mt-4 h-11">
             <Link to="/login">Back to Login</Link>

@@ -4,93 +4,144 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
-import { Plus, Search, AlertTriangle } from 'lucide-react';
-import { getInventoryData } from '../services/inventoryService';
+import { Plus, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { inventoryService } from '../services/inventoryService';
+import { masterDataService } from '../services/masterDataService';
 import { cn } from '../lib/utils';
 
-function AddProductModal({ isOpen, onClose }) {
+function AddProductModal({ isOpen, onClose, onRefresh }) {
+  const [formData, setFormData] = useState({
+    name: '',
+    categoryId: '',
+    sku: '',
+    costPrice: 0,
+    sellingPrice: 0,
+    quantityOnHand: 0,
+    reorderLevel: 5,
+    unitOfMeasure: 'units',
+    description: ''
+  });
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      masterDataService.getCategories().then(res => setCategories(res.data)).catch(console.error);
+    }
+  }, [isOpen]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: ['costPrice', 'sellingPrice', 'quantityOnHand', 'reorderLevel'].includes(name) ? Number(value) : value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      await masterDataService.createProduct(formData);
+      onRefresh();
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to create product');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const margin = formData.sellingPrice > 0 
+    ? ((formData.sellingPrice - formData.costPrice) / formData.sellingPrice * 100).toFixed(1) 
+    : 0;
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add New Product" size="md">
-      <div className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField label="Product Name" required className="md:col-span-2">
-            <Input placeholder="e.g. Executive Office Chair" />
+            <Input name="name" value={formData.name} onChange={handleChange} required placeholder="e.g. Executive Office Chair" />
           </FormField>
-          <FormField label="Category" required>
-            <Select>
+          <FormField label="Category">
+            <Select name="categoryId" value={formData.categoryId} onChange={handleChange}>
               <option value="">Select category</option>
-              <option>Seating</option>
-              <option>Tables</option>
-              <option>Sofas</option>
-              <option>Dining</option>
-              <option>Storage</option>
-              <option>Workstations</option>
+              {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
             </Select>
           </FormField>
           <FormField label="SKU / Product Code">
-            <Input placeholder="e.g. CHAIR-ERG-001" />
+            <Input name="sku" value={formData.sku} onChange={handleChange} required placeholder="e.g. CHAIR-ERG-001" />
           </FormField>
           <FormField label="Purchase Cost (₹)" required>
-            <Input type="number" min="0" placeholder="0" />
+            <Input name="costPrice" type="number" min="0" value={formData.costPrice} onChange={handleChange} required />
           </FormField>
           <FormField label="Selling Price (₹)" required>
-            <Input type="number" min="0" placeholder="0" />
+            <Input name="sellingPrice" type="number" min="0" value={formData.sellingPrice} onChange={handleChange} required />
           </FormField>
           <FormField label="Opening Stock Quantity" required>
-            <Input type="number" min="0" placeholder="0" />
+            <Input name="quantityOnHand" type="number" min="0" value={formData.quantityOnHand} onChange={handleChange} required />
           </FormField>
           <FormField label="Low Stock Alert (qty)">
-            <Input type="number" min="0" placeholder="5" />
-          </FormField>
-          <FormField label="Unit of Measure">
-            <Select>
-              <option>Units</option>
-              <option>Pieces</option>
-              <option>Sets</option>
-              <option>Meters</option>
-            </Select>
-          </FormField>
-          <FormField label="Valuation Method">
-            <Select>
-              <option>FIFO (First In, First Out)</option>
-              <option>AVCO (Average Cost)</option>
-            </Select>
+            <Input name="reorderLevel" type="number" min="0" value={formData.reorderLevel} onChange={handleChange} />
           </FormField>
         </div>
 
         <FormField label="Description">
-          <Textarea placeholder="Product description, material details, dimensions..." />
+          <Textarea name="description" value={formData.description} onChange={handleChange} placeholder="Product description, material details, dimensions..." />
         </FormField>
 
         {/* Margin preview */}
         <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
           <p className="text-xs font-semibold text-royal uppercase tracking-wide mb-2">Margin Preview</p>
-          <p className="text-sm text-slate-600">Enter purchase cost and selling price above to see the gross margin.</p>
+          <p className="text-sm text-slate-600">Expected Gross Margin: <strong className={margin < 15 ? 'text-red-600' : 'text-green-600'}>{margin}%</strong></p>
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={onClose}>Add Product</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button type="submit" disabled={loading}>{loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null} Add Product</Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
 
 export function Inventory() {
-  const [data, setData] = useState(null);
+  const [data, setData] = useState({ overview: null, products: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
 
+  const fetchInventory = async () => {
+    try {
+      setLoading(true);
+      const [overviewRes, productsRes] = await Promise.all([
+        inventoryService.getOverview(),
+        inventoryService.getProducts()
+      ]);
+      setData({ overview: overviewRes.data, products: productsRes.data });
+      setError(null);
+    } catch (err) {
+      setError("Failed to load inventory data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    getInventoryData().then(res => { setData(res); setLoading(false); });
+    fetchInventory();
   }, []);
 
-  if (loading) return <div className="flex justify-center items-center h-64 text-slate-500">Loading inventory...</div>;
+  const fmt = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
+  if (loading) return <div className="flex justify-center items-center h-64 text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2"/> Loading inventory...</div>;
+  if (error) return <div className="flex flex-col justify-center items-center h-64 text-red-500"><p>{error}</p><Button onClick={fetchInventory} className="mt-4">Retry</Button></div>;
 
   return (
     <div className="space-y-6">
-      <AddProductModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+      <AddProductModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onRefresh={fetchInventory} />
 
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
@@ -100,12 +151,11 @@ export function Inventory() {
         <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Add Product</Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card><CardContent className="p-5 text-center"><div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Total Value</div><div className="text-xl font-bold text-navy">{data.summary.totalValue}</div></CardContent></Card>
-        <Card><CardContent className="p-5 text-center"><div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Products</div><div className="text-xl font-bold text-navy">{data.summary.totalProducts}</div></CardContent></Card>
-        <Card className="border-red-200 bg-red-50/30"><CardContent className="p-5 text-center"><div className="text-xs font-medium text-red-700 uppercase tracking-wider mb-2">Low Stock</div><div className="text-xl font-bold text-red-600">{data.summary.lowStock}</div></CardContent></Card>
-        <Card className="border-amber-200 bg-amber-50/30"><CardContent className="p-5 text-center"><div className="text-xs font-medium text-amber-700 uppercase tracking-wider mb-2">Slow Moving</div><div className="text-xl font-bold text-amber-600">{data.summary.slowMoving}</div></CardContent></Card>
-        <Card className="border-blue-200 bg-blue-50/30"><CardContent className="p-5 text-center"><div className="text-xs font-medium text-blue-700 uppercase tracking-wider mb-2">Overstocked</div><div className="text-xl font-bold text-blue-600">{data.summary.overstocked}</div></CardContent></Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card><CardContent className="p-5 text-center"><div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Total Value</div><div className="text-xl font-bold text-navy">{fmt(data.overview.totalValue)}</div></CardContent></Card>
+        <Card><CardContent className="p-5 text-center"><div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Products</div><div className="text-xl font-bold text-navy">{data.overview.totalProducts}</div></CardContent></Card>
+        <Card className="border-red-200 bg-red-50/30"><CardContent className="p-5 text-center"><div className="text-xs font-medium text-red-700 uppercase tracking-wider mb-2">Low Stock</div><div className="text-xl font-bold text-red-600">{data.overview.lowStockCount}</div></CardContent></Card>
+        <Card className="border-green-200 bg-green-50/30"><CardContent className="p-5 text-center"><div className="text-xs font-medium text-green-700 uppercase tracking-wider mb-2">Total Quantity</div><div className="text-xl font-bold text-green-600">{data.overview.totalQuantity}</div></CardContent></Card>
       </div>
 
       <Card>
@@ -117,6 +167,9 @@ export function Inventory() {
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
+          {data.products.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">No products found. Add one to start tracking inventory.</div>
+          ) : (
           <table className="w-full text-sm text-left min-w-[800px]">
             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
               <tr>
@@ -130,29 +183,37 @@ export function Inventory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {data.products.map(product => (
+              {data.products.map(product => {
+                const isLow = product.quantityOnHand <= product.reorderLevel;
+                const margin = product.sellingPrice > 0 ? ((product.sellingPrice - product.costPrice) / product.sellingPrice * 100) : 0;
+                
+                return (
                 <tr 
-                  key={product.id} 
-                  className={cn("hover:bg-slate-50/50 cursor-pointer transition-colors", product.lowStock && "bg-red-50/20", product.overstocked && "bg-blue-50/20")}
-                  onClick={() => window.location.href = `/inventory/products/${product.id}`}
+                  key={product._id} 
+                  className={cn("hover:bg-slate-50/50 cursor-pointer transition-colors", isLow && "bg-red-50/20")}
+                  onClick={() => window.location.href = `/dashboard/inventory/products/${product._id}`}
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-navy">{product.name}</span>
-                      {product.lowStock && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded"><AlertTriangle className="w-2.5 h-2.5" /> LOW</span>}
-                      {product.overstocked && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">OVER</span>}
+                      {isLow && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded"><AlertTriangle className="w-2.5 h-2.5" /> LOW</span>}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">{product.category}</td>
-                  <td className="px-6 py-4 text-slate-600">{product.cost}</td>
-                  <td className="px-6 py-4 text-slate-700 font-medium">{product.sellingPrice}</td>
-                  <td className="px-6 py-4"><span className={cn("font-semibold", product.stock <= 5 ? "text-red-600" : product.stock >= 50 ? "text-blue-600" : "text-slate-700")}>{product.stock} units</span></td>
-                  <td className="px-6 py-4 text-slate-600">{product.stockValue}</td>
-                  <td className="px-6 py-4 text-right"><Badge variant={product.margin >= 35 ? 'success' : product.margin >= 20 ? 'warning' : 'outline'}>{product.margin}%</Badge></td>
+                  <td className="px-6 py-4 text-slate-500">{product.categoryId?.name || 'Uncategorized'}</td>
+                  <td className="px-6 py-4 text-slate-600">{fmt(product.costPrice)}</td>
+                  <td className="px-6 py-4 text-slate-700 font-medium">{fmt(product.sellingPrice)}</td>
+                  <td className="px-6 py-4"><span className={cn("font-semibold", isLow ? "text-red-600" : "text-slate-700")}>{product.quantityOnHand} units</span></td>
+                  <td className="px-6 py-4 text-slate-600">{fmt(product.quantityOnHand * product.costPrice)}</td>
+                  <td className="px-6 py-4 text-right">
+                    <Badge variant={margin > 30 ? 'success' : (margin > 15 ? 'warning' : 'destructive')}>
+                      {margin.toFixed(0)}%
+                    </Badge>
+                  </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
+          )}
         </CardContent>
       </Card>
     </div>

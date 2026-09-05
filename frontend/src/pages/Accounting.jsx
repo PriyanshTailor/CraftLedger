@@ -4,30 +4,30 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
-import { Plus, Trash2 } from 'lucide-react';
-import { getAccountingData } from '../services/accountingService';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { accountingService } from '../services/accountingService';
 import { cn } from '../lib/utils';
 
 const accountTypeColors = {
-  Asset: 'secondary', Liability: 'destructive', Equity: 'primary', Revenue: 'success', Expense: 'warning',
+  asset: 'secondary', liability: 'destructive', equity: 'primary', revenue: 'success', expense: 'warning',
 };
 
-const ACCOUNTS = [
-  '1000 - Cash & Cash Equivalents',
-  '1100 - Accounts Receivable',
-  '1200 - Inventory',
-  '2000 - Accounts Payable',
-  '4000 - Sales Revenue',
-  '5000 - Cost of Goods Sold',
-];
+function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts }) {
+  const [formData, setFormData] = useState({
+    entryDate: new Date().toISOString().split('T')[0],
+    description: '',
+    referenceType: 'manual',
+    referenceId: ''
+  });
 
-function CreateJournalEntryModal({ isOpen, onClose }) {
   const [lines, setLines] = useState([
-    { id: 1, account: '', description: '', debit: '', credit: '' },
-    { id: 2, account: '', description: '', debit: '', credit: '' },
+    { id: 1, accountId: '', description: '', debit: '', credit: '' },
+    { id: 2, accountId: '', description: '', debit: '', credit: '' },
   ]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const addLine = () => setLines(p => [...p, { id: Date.now(), account: '', description: '', debit: '', credit: '' }]);
+  const addLine = () => setLines(p => [...p, { id: Date.now(), accountId: '', description: '', debit: '', credit: '' }]);
   const removeLine = id => setLines(p => p.filter(l => l.id !== id));
   const updateLine = (id, field, value) => setLines(p => p.map(l => l.id === id ? { ...l, [field]: value } : l));
 
@@ -36,30 +36,60 @@ function CreateJournalEntryModal({ isOpen, onClose }) {
   const balanced = totalDebit === totalCredit && totalDebit > 0;
   const fmt = n => `₹${n.toLocaleString('en-IN')}`;
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!balanced) return;
+    setError('');
+    setSubmitting(true);
+    
+    try {
+      const payload = {
+        entryDate: formData.entryDate,
+        description: formData.description,
+        referenceType: formData.referenceType,
+        referenceId: formData.referenceId,
+        lines: lines.map(l => {
+          const acc = accounts.find(a => a._id === l.accountId);
+          return {
+            accountId: l.accountId,
+            accountNameSnapshot: acc ? acc.accountName : '',
+            debit: Number(l.debit) || 0,
+            credit: Number(l.credit) || 0,
+            description: l.description
+          };
+        }).filter(l => l.debit > 0 || l.credit > 0)
+      };
+
+      await accountingService.createJournalEntry(payload);
+      onRefresh();
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to create journal entry');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="New Journal Entry" size="lg">
-      <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FormField label="Date" required>
-            <Input type="date" defaultValue={new Date().toISOString().split('T')[0]} />
+            <Input type="date" value={formData.entryDate} onChange={e => setFormData({...formData, entryDate: e.target.value})} />
           </FormField>
-          <FormField label="Journal">
-            <Select>
-              <option>General Journal</option>
-              <option>Sales Journal</option>
-              <option>Purchase Journal</option>
-              <option>Cash Journal</option>
-            </Select>
+          <FormField label="Description">
+            <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Entry description" />
           </FormField>
           <FormField label="Reference">
-            <Input placeholder="e.g. INV-2026-0050" />
+            <Input value={formData.referenceId} onChange={e => setFormData({...formData, referenceId: e.target.value})} placeholder="e.g. INV-2026-0050" />
           </FormField>
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-slate-700">Journal Lines</h3>
-            <Button variant="outline" size="sm" onClick={addLine}><Plus className="w-3.5 h-3.5 mr-1.5" /> Add Line</Button>
+            <Button type="button" variant="outline" size="sm" onClick={addLine}><Plus className="w-3.5 h-3.5 mr-1.5" /> Add Line</Button>
           </div>
           <div className="border border-slate-200 rounded-lg overflow-hidden overflow-x-auto">
             <table className="w-full text-sm min-w-[600px]">
@@ -76,10 +106,10 @@ function CreateJournalEntryModal({ isOpen, onClose }) {
                 {lines.map(line => (
                   <tr key={line.id}>
                     <td className="px-4 py-3">
-                      <select value={line.account} onChange={e => updateLine(line.id, 'account', e.target.value)}
+                      <select value={line.accountId} onChange={e => updateLine(line.id, 'accountId', e.target.value)} required
                         className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-royal bg-white">
                         <option value="">Select account</option>
-                        {ACCOUNTS.map(a => <option key={a}>{a}</option>)}
+                        {accounts.map(a => <option key={a._id} value={a._id}>{a.accountCode} - {a.accountName}</option>)}
                       </select>
                     </td>
                     <td className="px-4 py-3">
@@ -87,15 +117,15 @@ function CreateJournalEntryModal({ isOpen, onClose }) {
                         placeholder="Description" className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-royal" />
                     </td>
                     <td className="px-4 py-3">
-                      <input type="number" min="0" value={line.debit} onChange={e => updateLine(line.id, 'debit', e.target.value)}
-                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal" />
+                      <input type="number" min="0" value={line.debit} onChange={e => updateLine(line.id, 'debit', e.target.value)} disabled={line.credit > 0}
+                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal disabled:bg-slate-50 disabled:text-slate-400" />
                     </td>
                     <td className="px-4 py-3">
-                      <input type="number" min="0" value={line.credit} onChange={e => updateLine(line.id, 'credit', e.target.value)}
-                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal" />
+                      <input type="number" min="0" value={line.credit} onChange={e => updateLine(line.id, 'credit', e.target.value)} disabled={line.debit > 0}
+                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal disabled:bg-slate-50 disabled:text-slate-400" />
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => removeLine(line.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                      <button type="button" onClick={() => removeLine(line.id)} className="text-slate-300 hover:text-red-500 transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
@@ -122,29 +152,53 @@ function CreateJournalEntryModal({ isOpen, onClose }) {
         </div>
 
         <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={!balanced} onClick={onClose}>Post Entry</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button type="submit" disabled={!balanced || submitting}>{submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Post Entry</Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
 
 export function Accounting() {
-  const [data, setData] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [journalEntries, setJournalEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('chart');
   const [modalOpen, setModalOpen] = useState(false);
 
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [accRes, jeRes] = await Promise.all([
+        accountingService.getAccounts(),
+        accountingService.getJournalEntries()
+      ]);
+      // Master-data list responses are paginated ({ docs, total, ... }),
+      // while journal entries are returned as a plain array.
+      setAccounts(Array.isArray(accRes.data) ? accRes.data : (accRes.data?.docs || []));
+      setJournalEntries(Array.isArray(jeRes.data) ? jeRes.data : (jeRes.data?.docs || []));
+      setError(null);
+    } catch (err) {
+      setError("Failed to load accounting data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    getAccountingData().then(res => { setData(res); setLoading(false); });
+    fetchData();
   }, []);
 
-  if (loading) return <div className="flex justify-center items-center h-64 text-slate-500">Loading accounting data...</div>;
+  const fmt = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
+  if (loading) return <div className="flex justify-center items-center h-64 text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2"/> Loading accounting data...</div>;
+  if (error) return <div className="flex flex-col justify-center items-center h-64 text-red-500"><p>{error}</p><Button onClick={fetchData} className="mt-4">Retry</Button></div>;
 
   return (
     <div className="space-y-6">
-      <CreateJournalEntryModal isOpen={modalOpen} onClose={() => setModalOpen(false)} />
+      <CreateJournalEntryModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onRefresh={fetchData} accounts={accounts} />
 
       <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
@@ -171,6 +225,9 @@ export function Accounting() {
             <CardDescription>Full listing of all financial accounts.</CardDescription>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
+            {accounts.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">No accounts found.</div>
+            ) : (
             <table className="w-full text-sm text-left min-w-[600px]">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -181,16 +238,17 @@ export function Accounting() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.chartOfAccounts.map(account => (
-                  <tr key={account.code} className="hover:bg-slate-50/50 cursor-pointer">
-                    <td className="px-6 py-4 font-mono text-slate-500 text-xs">{account.code}</td>
-                    <td className="px-6 py-4 font-medium text-navy">{account.name}</td>
-                    <td className="px-6 py-4"><Badge variant={accountTypeColors[account.type] || 'outline'}>{account.type}</Badge></td>
-                    <td className="px-6 py-4 text-right font-semibold text-slate-700">{account.balance}</td>
+                {accounts.map(account => (
+                  <tr key={account._id} className="hover:bg-slate-50/50 cursor-pointer">
+                  <td className="px-6 py-4 font-mono text-slate-500 text-xs">{account.accountCode}</td>
+                  <td className="px-6 py-4 font-medium text-navy">{account.accountName}</td>
+                  <td className="px-6 py-4"><Badge variant={accountTypeColors[account.accountType] || 'outline'}>{account.accountType.toUpperCase()}</Badge></td>
+                    <td className="px-6 py-4 text-right font-semibold text-slate-700">{fmt(0)} {/* Add real balance tracking later */}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
           </CardContent>
         </Card>
       )}
@@ -202,6 +260,9 @@ export function Accounting() {
             <CardDescription>Recorded double-entry transactions.</CardDescription>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
+            {journalEntries.length === 0 ? (
+              <div className="p-8 text-center text-slate-500">No journal entries found.</div>
+            ) : (
             <table className="w-full text-sm text-left min-w-[800px]">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -215,19 +276,20 @@ export function Accounting() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.recentJournalEntries.map(entry => (
-                  <tr key={entry.id} className="hover:bg-slate-50/50 cursor-pointer">
-                    <td className="px-6 py-4 font-semibold text-navy text-xs">{entry.id}</td>
-                    <td className="px-6 py-4 text-slate-500">{entry.date}</td>
-                    <td className="px-6 py-4 text-royal font-medium text-xs">{entry.reference}</td>
-                    <td className="px-6 py-4 text-slate-600 max-w-[200px] truncate">{entry.description}</td>
-                    <td className="px-6 py-4 font-medium text-slate-700">{entry.debit}</td>
-                    <td className="px-6 py-4 font-medium text-slate-700">{entry.credit}</td>
-                    <td className="px-6 py-4"><Badge variant="success">{entry.status}</Badge></td>
+                {journalEntries.map(entry => (
+                  <tr key={entry._id} className="hover:bg-slate-50/50 cursor-pointer">
+                    <td className="px-6 py-4 font-semibold text-navy text-xs">{entry.entryNumber}</td>
+                    <td className="px-6 py-4 text-slate-500">{new Date(entry.entryDate).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-royal font-medium text-xs">{entry.referenceId || '-'}</td>
+                    <td className="px-6 py-4 text-slate-600 max-w-[200px] truncate">{entry.description || '-'}</td>
+                    <td className="px-6 py-4 font-medium text-slate-700">{fmt(entry.totalDebit)}</td>
+                    <td className="px-6 py-4 font-medium text-slate-700">{fmt(entry.totalCredit)}</td>
+                    <td className="px-6 py-4"><Badge variant={entry.status === 'posted' ? 'success' : 'outline'}>{entry.status.toUpperCase()}</Badge></td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            )}
           </CardContent>
         </Card>
       )}
