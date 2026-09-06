@@ -38,6 +38,8 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
   const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
   const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
   const balanced = Math.abs(totalDebit - totalCredit) < 0.005 && totalDebit > 0;
+  const linesWithBothSides = lines.filter(line => Number(line.debit) > 0 && Number(line.credit) > 0).length;
+  const balanceDifference = Math.abs(totalDebit - totalCredit);
   const fmt = n => `₹${n.toLocaleString('en-IN')}`;
 
   const handleSubmit = async (e) => {
@@ -47,7 +49,8 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
     if (validateRequired(formData.description, 'Description')) errors.description = 'Description is required';
     if (lines.some(line => validateRequired(line.accountId, 'Account'))) errors.lines = 'Every journal line must have an account';
     if (lines.some(line => validateNumber(line.debit || 0, 'Debit', { min: 0 }) || validateNumber(line.credit || 0, 'Credit', { min: 0 }))) errors.lines = 'Debit and credit must be valid non-negative numbers';
-    if (!balanced) errors.lines = 'Debit and credit totals must be equal and greater than zero';
+    if (linesWithBothSides) errors.lines = 'Use one side per journal line. Add a second line for the credit or debit amount.';
+    if (!balanced && !linesWithBothSides) errors.lines = 'Debit and credit totals must be equal and greater than zero';
     setFieldErrors(errors);
     if (Object.keys(errors).length) { setError('Please correct the journal entry before posting.'); return; }
     setError('');
@@ -160,9 +163,14 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
               </tbody>
             </table>
           </div>
-          {!balanced && totalDebit > 0 && (
+          {linesWithBothSides > 0 && (
             <p className="text-xs text-red-600 mt-2 font-medium">
-              ⚠ Entry is not balanced. Debit and Credit must be equal.
+              Each journal line must contain either a debit or a credit, not both. Add another line for the opposite side.
+            </p>
+          )}
+          {!balanced && totalDebit > 0 && linesWithBothSides === 0 && (
+            <p className="text-xs text-red-600 mt-2 font-medium">
+              ⚠ Entry is not balanced. Debit and credit differ by {fmt(balanceDifference)}.
             </p>
           )}
           {balanced && (
