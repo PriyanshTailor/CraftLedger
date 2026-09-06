@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users as UsersIcon, UserPlus, Search, RefreshCw, Power, Archive,
+  Users as UsersIcon, UserPlus, Search, RefreshCw, Power, Archive, ArchiveRestore,
   Shield, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import api from '../services/api';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { ROLES, ROLE_LABELS } from '../lib/roles';
+import { getApiErrorMessage, getApiFieldErrors, validateEmail, validateRequired } from '../lib/validation';
 
 export function Users() {
   const { user } = useAuth();
@@ -20,13 +21,15 @@ export function Users() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
 
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get('/users');
+      const res = await api.get('/users', { params: showArchived ? { includeArchived: 'true' } : undefined });
       setUsers(res.data?.users || []);
     } catch (err) {
       setError(err.message || 'Failed to load users');
@@ -37,10 +40,16 @@ export function Users() {
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+  }, [showArchived]);
 
   const handleCreateAccountant = async (e) => {
     e.preventDefault();
+    const errors = {};
+    if (validateRequired(formData.name, 'Name')) errors.name = 'Name is required';
+    if (validateEmail(formData.email)) errors.email = 'Enter a valid email address';
+    if (!formData.password || formData.password.length < 6) errors.password = 'Password must be at least 6 characters';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
     setIsSubmitting(true);
     setError('');
     try {
@@ -50,7 +59,8 @@ export function Users() {
       setFormData({ name: '', email: '', password: '' });
       fetchUsers();
     } catch (err) {
-      setError(err.message || 'Failed to create accountant');
+      setFieldErrors(getApiFieldErrors(err));
+      setError(getApiErrorMessage(err, 'Failed to create accountant'));
     } finally {
       setIsSubmitting(false);
     }
@@ -77,6 +87,16 @@ export function Users() {
     }
   };
 
+  const handleRestore = async (u) => {
+    try {
+      await api.patch(`/users/${u._id}/restore`);
+      setMessage({ type: 'success', text: `User ${u.name} restored` });
+      fetchUsers();
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message || 'Failed to restore user' });
+    }
+  };
+
   const filtered = users.filter(u =>
     (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.email || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -94,6 +114,9 @@ export function Users() {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={fetchUsers} disabled={isLoading} className="h-10 text-sm">
             <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+          <Button variant="outline" onClick={() => setShowArchived(value => !value)} className="h-10 text-sm">
+            <ArchiveRestore className="w-4 h-4 mr-2" /> {showArchived ? 'Hide archived' : 'Show archived'}
           </Button>
           {isBusinessOwner && (
             <Button onClick={() => { setIsModalOpen(true); setError(''); }} className="h-10 text-sm bg-royal hover:bg-blue-600 text-white font-medium">
@@ -176,7 +199,7 @@ export function Users() {
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-slate-400 text-xs font-medium">
-                          <span className="w-2 h-2 rounded-full bg-slate-300" /> Inactive
+                          <span className="w-2 h-2 rounded-full bg-slate-300" /> {u.isArchived ? 'Archived' : 'Inactive'}
                         </span>
                       )}
                     </td>
@@ -195,12 +218,15 @@ export function Users() {
                             <Power className="w-3.5 h-3.5 inline mr-1" />
                             {u.isActive ? 'Deactivate' : 'Activate'}
                           </button>
-                          <button
-                            onClick={() => handleArchive(u)}
-                            className="px-2.5 py-1 text-xs rounded-md border bg-slate-50 text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700 transition-colors"
-                          >
-                            <Archive className="w-3.5 h-3.5 inline mr-1" /> Archive
-                          </button>
+                          {u.isArchived ? (
+                            <button onClick={() => handleRestore(u)} className="px-2.5 py-1 text-xs rounded-md border bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 transition-colors">
+                              <ArchiveRestore className="w-3.5 h-3.5 inline mr-1" /> Restore
+                            </button>
+                          ) : (
+                            <button onClick={() => handleArchive(u)} className="px-2.5 py-1 text-xs rounded-md border bg-slate-50 text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700 transition-colors">
+                              <Archive className="w-3.5 h-3.5 inline mr-1" /> Archive
+                            </button>
+                          )}
                         </>
                       )}
                     </td>
@@ -228,24 +254,30 @@ export function Users() {
                 <input
                   type="text" required placeholder="Accountant Name" value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-royal/20 focus:border-royal focus:outline-none"
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  className={`w-full h-10 px-3 text-sm border rounded-lg focus:ring-2 focus:ring-royal/20 focus:border-royal focus:outline-none ${fieldErrors.name ? 'border-red-300' : 'border-slate-200'}`}
                 />
+                {fieldErrors.name && <p className="mt-1 text-xs text-red-600">{fieldErrors.name}</p>}
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Email Address</label>
                 <input
                   type="email" required placeholder="accountant@company.com" value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-royal/20 focus:border-royal focus:outline-none"
+                  aria-invalid={Boolean(fieldErrors.email)}
+                  className={`w-full h-10 px-3 text-sm border rounded-lg focus:ring-2 focus:ring-royal/20 focus:border-royal focus:outline-none ${fieldErrors.email ? 'border-red-300' : 'border-slate-200'}`}
                 />
+                {fieldErrors.email && <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>}
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-700 block mb-1">Temporary Password</label>
                 <input
                   type="password" required minLength={6} placeholder="Min 6 characters" value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-royal/20 focus:border-royal focus:outline-none"
+                  aria-invalid={Boolean(fieldErrors.password)}
+                  className={`w-full h-10 px-3 text-sm border rounded-lg focus:ring-2 focus:ring-royal/20 focus:border-royal focus:outline-none ${fieldErrors.password ? 'border-red-300' : 'border-slate-200'}`}
                 />
+                {fieldErrors.password && <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>}
               </div>
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
                 <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="h-10 text-sm">Cancel</Button>

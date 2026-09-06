@@ -1,14 +1,15 @@
 import { z } from 'zod';
+import { dateString, positiveNumber } from './commonValidators.js';
 
 const purchaseOrderItemSchema = z.object({
   productId: z.string().min(1, 'Product ID is required'),
-  quantity: z.number().min(0.01, 'Quantity must be at least 0.01')
+  quantity: positiveNumber
 });
 
 export const createPurchaseOrderSchema = z.object({
   vendorId: z.string().min(1, 'Vendor ID is required'),
-  orderDate: z.string().min(1, 'Order date is required').optional(),
-  expectedDeliveryDate: z.string().optional(),
+  orderDate: dateString.min(1, 'Order date is required').optional(),
+  expectedDeliveryDate: dateString.optional(),
   items: z.array(purchaseOrderItemSchema).min(1, 'At least one item is required'),
   notes: z.string().optional()
 });
@@ -21,13 +22,13 @@ export const updatePurchaseOrderSchema = z.object({
 export const receiveProductsSchema = z.object({
   items: z.array(z.object({
     productId: z.string().min(1, 'Product ID is required'),
-    quantityToReceive: z.number().min(0.01, 'Must receive at least 0.01')
+    quantityToReceive: positiveNumber
   })).min(1, 'At least one item is required to receive')
 });
 
 export const recordVendorPaymentSchema = z.object({
-  amount: z.number().min(0.01, 'Amount must be greater than 0'),
-  paymentDate: z.string().optional(),
+  amount: positiveNumber,
+  paymentDate: dateString.optional(),
   paymentMethod: z.enum(['cash', 'bank_transfer', 'UPI', 'cheque', 'card', 'other']),
   referenceNumber: z.string().optional(),
   notes: z.string().optional()

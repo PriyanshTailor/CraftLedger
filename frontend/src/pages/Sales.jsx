@@ -8,6 +8,7 @@ import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
 import { Plus, Search, Filter, Trash2, Loader2, TrendingUp, X } from 'lucide-react';
 import { salesService } from '../services/salesService';
 import { masterDataService } from '../services/masterDataService';
+import { validateNumber, validateRequired } from '../lib/validation';
 
 function CreateSalesOrderModal({ isOpen, onClose, onSubmitted }) {
   const [customers, setCustomers] = useState([]);
@@ -85,32 +86,32 @@ function CreateSalesOrderModal({ isOpen, onClose, onSubmitted }) {
     setSubmitting(true);
     
     try {
-      if (!formData.customerId) throw new Error("Please select a customer");
-      if (items.length === 0 || items.some(item => !item.productId || item.qty <= 0)) {
-        throw new Error("Add a product and a valid quantity to every order line");
+      if (validateRequired(formData.customerId, 'Customer')) throw new Error('Please select a customer');
+      if (!formData.orderDate || (formData.expectedDeliveryDate && new Date(formData.expectedDeliveryDate) < new Date(formData.orderDate))) throw new Error('Delivery date must be on or after order date');
+      if (items.length === 0 || items.some(item => !item.productId || validateNumber(item.qty, 'Quantity', { min: 0.01 }) || validateNumber(item.unitPrice, 'Unit price', { min: 0 }) || validateNumber(item.discount, 'Discount', { min: 0, max: 100 }))) {
+        throw new Error('Every order line needs a product, valid non-negative price, quantity greater than zero, and discount from 0 to 100');
       }
 
-      // Demo behavior: validate and acknowledge the form without sending a request or storing a record.
-      await new Promise(resolve => window.setTimeout(resolve, 350));
-      const customer = customers.find(item => item._id === formData.customerId);
-      const previewId = `sales-preview-${Date.now()}`;
-      onSubmitted({
-        _id: previewId,
-        isLocalPreview: true,
-        orderNumber: `SO-PREVIEW-${previewId.slice(-5)}`,
-        customerId: { _id: formData.customerId, name: customer?.name || 'Customer' },
+      const response = await salesService.createOrder({
+        customerId: formData.customerId,
         orderDate: formData.orderDate,
-        expectedDeliveryDate: formData.expectedDeliveryDate || null,
-        items: items.map(item => ({ ...item, quantity: item.qty })),
-        totalAmount,
-        status: confirm ? 'confirmed' : 'draft',
-        paymentStatus: 'unpaid'
+        expectedDeliveryDate: formData.expectedDeliveryDate || undefined,
+        items: items.map(item => ({ productId: item.productId, quantity: item.qty, discount: item.discount })),
+        notes: formData.notes
       });
+      let savedOrder = response.data;
+      if (confirm) {
+        const confirmedResponse = await salesService.confirmOrder(savedOrder._id);
+        savedOrder = confirmedResponse.data;
+      }
+      onSubmitted(savedOrder);
       setFormData({ customerId: '', orderDate: new Date().toISOString().split('T')[0], expectedDeliveryDate: '', notes: '' });
       setItems([{ id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitPrice: 0, discount: 0, taxRate: 0 }]);
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to create order');
+      setSubmitting(false);
+    } finally {
       setSubmitting(false);
     }
   };
@@ -150,7 +151,7 @@ function CreateSalesOrderModal({ isOpen, onClose, onSubmitted }) {
             </Button>
           </div>
           <div className="border border-slate-200 rounded-lg overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm min-w-150">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Product</th>
@@ -388,7 +389,7 @@ export function Sales() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-sm text-left min-w-[800px]">
+            <table className="w-full text-sm text-left min-w-200">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4 font-medium">Order #</th>

@@ -8,6 +8,7 @@ import { Plus, AlertTriangle, TrendingUp, Loader2 } from 'lucide-react';
 import { budgetService } from '../services/budgetService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts';
 import { cn } from '../lib/utils';
+import { getApiErrorMessage, getApiFieldErrors, validateNumber, validateRequired } from '../lib/validation';
 
 function formatINR(value) {
   if (value === 0) return '₹0';
@@ -26,9 +27,19 @@ function CreateBudgetModal({ isOpen, onClose, onRefresh }) {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const errors = {};
+    if (validateRequired(formData.name, 'Budget name')) errors.name = validateRequired(formData.name, 'Budget name');
+    if (validateRequired(formData.periodStart, 'Start date')) errors.periodStart = 'Start date is required';
+    if (validateRequired(formData.periodEnd, 'End date')) errors.periodEnd = 'End date is required';
+    const amountError = validateNumber(formData.plannedAmount, 'Planned amount', { min: 0 });
+    if (amountError) errors.plannedAmount = amountError;
+    if (!errors.periodStart && !errors.periodEnd && new Date(formData.periodEnd) < new Date(formData.periodStart)) errors.periodEnd = 'End date must be on or after start date';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) { setError('Please correct the highlighted fields before saving.'); return; }
     setSubmitting(true);
     setError('');
     try {
@@ -44,7 +55,8 @@ function CreateBudgetModal({ isOpen, onClose, onRefresh }) {
       onRefresh();
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to create budget');
+      setFieldErrors(getApiFieldErrors(err));
+      setError(getApiErrorMessage(err, 'Failed to create budget'));
     } finally {
       setSubmitting(false);
     }
@@ -55,25 +67,26 @@ function CreateBudgetModal({ isOpen, onClose, onRefresh }) {
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">{error}</div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField label="Budget Name" required className="md:col-span-2">
-            <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="e.g. Procurement Budget Q3" />
+          <FormField label="Budget Name" required className="md:col-span-2" error={fieldErrors.name}>
+            <Input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required aria-invalid={Boolean(fieldErrors.name)} placeholder="e.g. Procurement Budget Q3" />
           </FormField>
-          <FormField label="Start Date" required>
-            <Input type="date" value={formData.periodStart} onChange={e => setFormData({...formData, periodStart: e.target.value})} required />
+          <FormField label="Start Date" required error={fieldErrors.periodStart}>
+            <Input type="date" value={formData.periodStart} onChange={e => setFormData({...formData, periodStart: e.target.value})} required aria-invalid={Boolean(fieldErrors.periodStart)} />
           </FormField>
-          <FormField label="End Date" required>
-            <Input type="date" value={formData.periodEnd} onChange={e => setFormData({...formData, periodEnd: e.target.value})} required />
+          <FormField label="End Date" required error={fieldErrors.periodEnd}>
+            <Input type="date" value={formData.periodEnd} onChange={e => setFormData({...formData, periodEnd: e.target.value})} required aria-invalid={Boolean(fieldErrors.periodEnd)} />
           </FormField>
           <FormField label="Responsible Person">
             <Input value={formData.responsiblePerson} onChange={e => setFormData({...formData, responsiblePerson: e.target.value})} placeholder="e.g. Rahul Sharma" />
           </FormField>
-          <FormField label="Planned Amount (₹)" required>
+          <FormField label="Planned Amount (₹)" required error={fieldErrors.plannedAmount}>
             <Input
               type="number"
               min="0"
               required
               placeholder="e.g. 500000"
               value={formData.plannedAmount}
+              aria-invalid={Boolean(fieldErrors.plannedAmount)}
               onChange={e => setFormData({...formData, plannedAmount: e.target.value})}
             />
           </FormField>

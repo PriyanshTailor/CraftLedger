@@ -88,9 +88,11 @@ router.get(
   authorizeRoles(ROLES.PLATFORM_ADMIN, ROLES.BUSINESS_OWNER),
   async (req, res, next) => {
     try {
+      const includeArchived = req.query.includeArchived === 'true';
       const filter = req.user.role === ROLES.PLATFORM_ADMIN
-        ? { isArchived: false }
-        : { businessId: req.user.businessId, isArchived: false };
+        ? {}
+        : { businessId: req.user.businessId };
+      if (!includeArchived) filter.isArchived = false;
 
       const users = await User.find(filter)
         .select('-passwordHash -resetPasswordToken -resetPasswordExpire')
@@ -152,11 +154,30 @@ router.patch(
 
       const user = await User.findOneAndUpdate(
         filter,
-        { isArchived: true, isActive: false },
+        { isArchived: true, isActive: false, archivedAt: new Date() },
         { new: true }
       ).select('-passwordHash');
       if (!user) return sendError(res, 404, 'User not found');
       return sendSuccess(res, 200, 'User archived', { user });
+    } catch (e) { next(e); }
+  }
+);
+
+router.patch(
+  '/:id/restore',
+  authorizeRoles(ROLES.PLATFORM_ADMIN, ROLES.BUSINESS_OWNER),
+  async (req, res, next) => {
+    try {
+      const filter = req.user.role === ROLES.PLATFORM_ADMIN
+        ? { _id: req.params.id }
+        : { _id: req.params.id, businessId: req.user.businessId };
+      const user = await User.findOneAndUpdate(
+        filter,
+        { isArchived: false, isActive: true, archivedAt: null },
+        { new: true }
+      ).select('-passwordHash -resetPasswordToken -resetPasswordExpire');
+      if (!user) return sendError(res, 404, 'User not found');
+      return sendSuccess(res, 200, 'User restored', { user });
     } catch (e) { next(e); }
   }
 );

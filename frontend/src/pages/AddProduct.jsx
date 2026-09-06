@@ -10,11 +10,13 @@ import {
 } from 'lucide-react';
 import { masterDataService } from '../services/masterDataService';
 import { cn } from '../lib/utils';
+import { getApiErrorMessage, getApiFieldErrors, validateFields, validateNumber, validateRequired } from '../lib/validation';
 
 export function AddProduct() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState(false);
   const [categories, setCategories] = useState([]);
 
@@ -71,16 +73,18 @@ export function AddProduct() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      setError('Product name is required');
-      return;
-    }
-    if (!formData.sku.trim()) {
-      setError('SKU / Code is required');
-      return;
-    }
-    if (price < 0 || cost < 0) {
-      setError('Prices cannot be negative');
+    const errors = validateFields(formData, {
+      name: value => validateRequired(value, 'Product name'),
+      sku: value => validateRequired(value, 'SKU / Code'),
+      costPrice: value => validateNumber(value, 'Cost price', { min: 0 }),
+      sellingPrice: value => validateNumber(value, 'Selling price', { min: 0 }),
+      quantityOnHand: value => validateNumber(value, 'Opening stock', { min: 0 }),
+      reorderLevel: value => validateNumber(value, 'Reorder level', { min: 0 }),
+      taxRate: value => validateNumber(value, 'Tax rate', { min: 0, max: 100 })
+    });
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      setError('Please correct the highlighted fields before saving.');
       return;
     }
 
@@ -110,7 +114,8 @@ export function AddProduct() {
         navigate('/dashboard/inventory');
       }, 1200);
     } catch (err) {
-      setError(err.message || 'Failed to create product. Please check your inputs.');
+      setFieldErrors(getApiFieldErrors(err));
+      setError(getApiErrorMessage(err, 'Failed to create product. Please check your inputs.'));
     } finally {
       setLoading(false);
     }
@@ -204,13 +209,14 @@ export function AddProduct() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-6 space-y-5">
-              <FormField label="Product Name" required>
+              <FormField label="Product Name" required error={fieldErrors.name}>
                 <Input
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="e.g. Ergonomic Executive Mesh Chair"
                   required
+                  aria-invalid={Boolean(fieldErrors.name)}
                 />
               </FormField>
 
@@ -230,7 +236,7 @@ export function AddProduct() {
                   </Select>
                 </FormField>
 
-                <FormField label="SKU / Item Code" required>
+                <FormField label="SKU / Item Code" required error={fieldErrors.sku}>
                   <div className="flex gap-2">
                     <Input
                       name="sku"
@@ -239,6 +245,7 @@ export function AddProduct() {
                       placeholder="e.g. CHR-7482"
                       className="font-mono text-sm uppercase"
                       required
+                      aria-invalid={Boolean(fieldErrors.sku)}
                     />
                     <Button
                       type="button"
@@ -277,7 +284,7 @@ export function AddProduct() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField label="Opening Stock (Qty)" required>
+                <FormField label="Opening Stock (Qty)" required error={fieldErrors.quantityOnHand}>
                   <Input
                     name="quantityOnHand"
                     type="number"
@@ -285,6 +292,7 @@ export function AddProduct() {
                     value={formData.quantityOnHand}
                     onChange={handleChange}
                     required
+                    aria-invalid={Boolean(fieldErrors.quantityOnHand)}
                   />
                 </FormField>
 
@@ -304,13 +312,14 @@ export function AddProduct() {
                   </Select>
                 </FormField>
 
-                <FormField label="Low-Stock Alert Level" hint="Triggers warning flag">
+                <FormField label="Low-Stock Alert Level" hint="Triggers warning flag" error={fieldErrors.reorderLevel}>
                   <Input
                     name="reorderLevel"
                     type="number"
                     min="0"
                     value={formData.reorderLevel}
                     onChange={handleChange}
+                    aria-invalid={Boolean(fieldErrors.reorderLevel)}
                   />
                 </FormField>
               </div>

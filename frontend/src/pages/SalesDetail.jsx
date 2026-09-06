@@ -11,6 +11,9 @@ export function SalesDetail() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [completing, setCompleting] = useState(false);
+  const [generatingInvoice, setGeneratingInvoice] = useState(false);
+  const [invoice, setInvoice] = useState(null);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -27,6 +30,34 @@ export function SalesDetail() {
     };
     fetchOrder();
   }, [id]);
+
+  const handleMarkComplete = async () => {
+    try {
+      setCompleting(true);
+      const response = await salesService.confirmOrder(id);
+      setOrder(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err.message || 'Unable to mark this order complete');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleGenerateInvoice = async () => {
+    try {
+      setGeneratingInvoice(true);
+      const response = await salesService.generateInvoice(id);
+      setInvoice(response.data);
+      const orderResponse = await salesService.getOrder(id);
+      setOrder(orderResponse.data);
+      setError(null);
+    } catch (err) {
+      setError(err.message || 'Unable to generate invoice');
+    } finally {
+      setGeneratingInvoice(false);
+    }
+  };
 
   if (loading) return <div className="flex justify-center items-center h-64 text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2"/> Loading order...</div>;
   if (error || !order) return <div className="flex justify-center items-center h-64 text-red-500">{error}</div>;
@@ -64,8 +95,8 @@ export function SalesDetail() {
           
           <div className="flex items-center gap-2">
             <Button variant="outline"><Edit className="w-4 h-4 mr-2" /> Edit</Button>
-            <Button variant="outline"><FileText className="w-4 h-4 mr-2" /> Invoice</Button>
-            <Button><CheckCircle2 className="w-4 h-4 mr-2" /> Mark Complete</Button>
+            <Button variant="outline" onClick={handleGenerateInvoice} disabled={generatingInvoice || order.status === 'draft'}><FileText className="w-4 h-4 mr-2" /> {generatingInvoice ? 'Generating...' : 'Invoice'}</Button>
+            <Button onClick={handleMarkComplete} disabled={completing || order.status !== 'draft'}><CheckCircle2 className="w-4 h-4 mr-2" /> {completing ? 'Saving...' : order.status === 'draft' ? 'Mark Complete' : 'Completed'}</Button>
             <Button variant="outline" className="px-2"><MoreVertical className="w-4 h-4 text-slate-500" /></Button>
           </div>
         </div>
@@ -138,7 +169,7 @@ export function SalesDetail() {
                 <div className="flex items-center gap-3">
                   <FileText className="w-5 h-5 text-royal" />
                   <div>
-                    <p className="font-medium text-navy">INV-{order.orderNumber}</p>
+                    <p className="font-medium text-navy">{invoice?.invoiceNumber || 'Invoice not generated'}</p>
                     <p className="text-xs text-slate-500">{new Date(order.orderDate).toLocaleDateString()}</p>
                   </div>
                 </div>

@@ -16,6 +16,8 @@ const contactSchema = new mongoose.Schema({
   hasLoginAccess: { type: Boolean, default: false },
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isActive: { type: Boolean, default: true },
+  isArchived: { type: Boolean, default: false, index: true },
+  archivedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 export default mongoose.model('Contact', contactSchema);

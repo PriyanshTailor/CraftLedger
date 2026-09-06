@@ -10,6 +10,8 @@ const journalSchema = new mongoose.Schema({
     required: true 
   },
   isActive: { type: Boolean, default: true },
+  isArchived: { type: Boolean, default: false, index: true },
+  archivedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // Ensure code is unique within a business

@@ -13,6 +13,8 @@ const accountSchema = new mongoose.Schema({
   openingBalance: { type: Number, default: 0 },
   currentBalance: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },
+  isArchived: { type: Boolean, default: false, index: true },
+  archivedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // Ensure accountCode is unique within a business

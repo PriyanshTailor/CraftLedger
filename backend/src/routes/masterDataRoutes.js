@@ -42,6 +42,7 @@ const setupRoutes = (path, Model, schema, ModelName) => {
     .put(authorizeRoles(...bizRoles), validate(schema), ctrl.update)
     .patch(authorizeRoles(...bizRoles), validate(schema), ctrl.update);
   router.patch(`${path}/:id/archive`, authorizeRoles(...ownerOnly), ctrl.delete);
+  router.patch(`${path}/:id/restore`, authorizeRoles(...ownerOnly), ctrl.restore);
 };
 
 setupRoutes('/contacts',          Contact,          contactSchema,          'Contact');

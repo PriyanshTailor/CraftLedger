@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
-import { Plus, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { ArchiveRestore, Plus, Search, AlertTriangle, Loader2 } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import { masterDataService } from '../services/masterDataService';
 import { cn } from '../lib/utils';
@@ -149,15 +149,16 @@ export function Inventory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const fetchInventory = async () => {
     try {
       setLoading(true);
       const [overviewRes, productsRes] = await Promise.all([
         inventoryService.getOverview(),
-        inventoryService.getProducts()
+        inventoryService.getProducts(showArchived ? { includeArchived: 'true' } : undefined)
       ]);
-      setData({ overview: overviewRes.data, products: productsRes.data });
+      setData({ overview: overviewRes.data, products: productsRes.data || [] });
       setError(null);
     } catch (err) {
       setError("Failed to load inventory data");
@@ -168,7 +169,7 @@ export function Inventory() {
 
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [showArchived]);
 
   const fmt = n => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
 
@@ -192,6 +193,7 @@ export function Inventory() {
             </Link>
           </Button>
           <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Add Product</Button>
+          <Button variant="outline" onClick={() => setShowArchived(value => !value)}><ArchiveRestore className="w-4 h-4 mr-2" /> {showArchived ? 'Hide archived' : 'Show archived'}</Button>
         </div>
       </div>
 
@@ -214,7 +216,7 @@ export function Inventory() {
           {data.products.length === 0 ? (
             <div className="p-8 text-center text-slate-500">No products found. Add one to start tracking inventory.</div>
           ) : (
-          <table className="w-full text-sm text-left min-w-[800px]">
+          <table className="w-full text-sm text-left min-w-200">
             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4 font-medium">Product</th>
@@ -240,6 +242,7 @@ export function Inventory() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-navy">{product.name}</span>
+                      {!product.isActive && <Badge variant="outline">ARCHIVED</Badge>}
                       {isLow && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-700 bg-red-100 px-1.5 py-0.5 rounded"><AlertTriangle className="w-2.5 h-2.5" /> LOW</span>}
                     </div>
                   </td>

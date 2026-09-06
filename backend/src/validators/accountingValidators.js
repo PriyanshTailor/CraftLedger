@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { nonNegativeNumber } from './commonValidators.js';
 
 export const journalEntryLineSchema = z.object({
   accountId: z.string().min(1, 'Account ID is required'),
-  debit: z.number().min(0).default(0),
-  credit: z.number().min(0).default(0),
+  debit: nonNegativeNumber.default(0),
+  credit: nonNegativeNumber.default(0),
   description: z.string().optional()
 }).refine(data => !(data.debit > 0 && data.credit > 0), {
   message: "A single line cannot have both debit and credit amounts",

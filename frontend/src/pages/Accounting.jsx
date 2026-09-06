@@ -8,6 +8,7 @@ import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
 import { Plus, Trash2, Loader2, TrendingUp } from 'lucide-react';
 import { accountingService } from '../services/accountingService';
 import { cn } from '../lib/utils';
+import { getApiErrorMessage, getApiFieldErrors, validateNumber, validateRequired } from '../lib/validation';
 
 const accountTypeColors = {
   asset: 'secondary', liability: 'destructive', equity: 'primary', revenue: 'success', expense: 'warning',
@@ -28,6 +29,7 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const addLine = () => setLines(p => [...p, { id: Date.now(), accountId: '', description: '', debit: '', credit: '' }]);
   const removeLine = id => setLines(p => p.filter(l => l.id !== id));
@@ -40,7 +42,14 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!balanced) return;
+    const errors = {};
+    if (validateRequired(formData.journalId, 'Journal')) errors.journalId = 'Journal is required';
+    if (validateRequired(formData.description, 'Description')) errors.description = 'Description is required';
+    if (lines.some(line => validateRequired(line.accountId, 'Account'))) errors.lines = 'Every journal line must have an account';
+    if (lines.some(line => validateNumber(line.debit || 0, 'Debit', { min: 0 }) || validateNumber(line.credit || 0, 'Credit', { min: 0 }))) errors.lines = 'Debit and credit must be valid non-negative numbers';
+    if (!balanced) errors.lines = 'Debit and credit totals must be equal and greater than zero';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) { setError('Please correct the journal entry before posting.'); return; }
     setError('');
     setSubmitting(true);
     
@@ -67,7 +76,8 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
       onRefresh();
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to create journal entry');
+      setFieldErrors(getApiFieldErrors(err));
+      setError(getApiErrorMessage(err, 'Failed to create journal entry'));
     } finally {
       setSubmitting(false);
     }
@@ -81,11 +91,11 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
           <FormField label="Date" required>
             <Input type="date" value={formData.entryDate} onChange={e => setFormData({...formData, entryDate: e.target.value})} />
           </FormField>
-          <FormField label="Description">
-            <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Entry description" required />
+          <FormField label="Description" error={fieldErrors.description}>
+            <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Entry description" required aria-invalid={Boolean(fieldErrors.description)} />
           </FormField>
-          <FormField label="Journal" required>
-            <Select value={formData.journalId} onChange={e => setFormData({...formData, journalId: e.target.value})} required>
+          <FormField label="Journal" required error={fieldErrors.journalId}>
+            <Select value={formData.journalId} onChange={e => setFormData({...formData, journalId: e.target.value})} required aria-invalid={Boolean(fieldErrors.journalId)}>
               <option value="">Select journal</option>
               {journals.map(journal => <option key={journal._id} value={journal._id}>{journal.code} - {journal.name}</option>)}
             </Select>

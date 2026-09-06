@@ -9,8 +9,8 @@ export const contactSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   taxNumber: z.string().optional(),
-  openingBalance: z.number().optional(),
-  creditLimit: z.number().optional(),
+  openingBalance: z.number().finite().min(0, 'Opening balance cannot be negative').optional(),
+  creditLimit: z.number().finite().min(0, 'Credit limit cannot be negative').optional(),
   paymentTerms: z.string().optional(),
   isActive: z.boolean().optional(),
 });
@@ -27,11 +27,11 @@ export const productSchema = z.object({
   sku: z.string().min(1, 'SKU is required'),
   description: z.string().optional(),
   unit: z.string().optional(),
-  costPrice: z.number().min(0, 'Cost price must be positive'),
-  sellingPrice: z.number().min(0, 'Selling price must be positive'),
-  taxRate: z.number().min(0, 'Tax rate must be positive').optional(),
-  quantityOnHand: z.number().min(0, 'Quantity must be non-negative').optional(),
-  reorderLevel: z.number().min(0, 'Reorder level must be non-negative').optional(),
+  costPrice: z.number().finite().min(0, 'Cost price must be non-negative'),
+  sellingPrice: z.number().finite().min(0, 'Selling price must be non-negative'),
+  taxRate: z.number().finite().min(0, 'Tax rate must be non-negative').max(100, 'Tax rate cannot exceed 100%').optional(),
+  quantityOnHand: z.number().finite().min(0, 'Quantity must be non-negative').optional(),
+  reorderLevel: z.number().finite().min(0, 'Reorder level must be non-negative').optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -40,7 +40,7 @@ export const accountSchema = z.object({
   accountName: z.string().min(1, 'Account name is required'),
   accountType: z.enum(['asset', 'liability', 'equity', 'income', 'expense']),
   parentAccountId: z.string().optional().nullable(),
-  openingBalance: z.number().optional(),
+  openingBalance: z.number().finite().min(0, 'Opening balance cannot be negative').optional(),
   isActive: z.boolean().optional(),
 });
 

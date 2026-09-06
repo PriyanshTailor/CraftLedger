@@ -11,6 +11,7 @@ export function PurchaseDetail() {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [completing, setCompleting] = useState(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -27,6 +28,19 @@ export function PurchaseDetail() {
     };
     fetchOrder();
   }, [id]);
+
+  const handleMarkComplete = async () => {
+    try {
+      setCompleting(true);
+      const response = await purchaseService.confirmOrder(id);
+      setOrder(response.data);
+      setError(null);
+    } catch (err) {
+      setError(err.message || 'Unable to mark this purchase order complete');
+    } finally {
+      setCompleting(false);
+    }
+  };
 
   if (loading) return <div className="flex justify-center items-center h-64 text-slate-500"><Loader2 className="w-6 h-6 animate-spin mr-2"/> Loading order...</div>;
   if (error || !order) return <div className="flex justify-center items-center h-64 text-red-500">{error}</div>;
@@ -62,6 +76,7 @@ export function PurchaseDetail() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button onClick={handleMarkComplete} disabled={completing || order.status !== 'draft'}><CheckCircle2 className="w-4 h-4 mr-2" /> {completing ? 'Saving...' : order.status === 'draft' ? 'Mark Complete' : 'Completed'}</Button>
             <Button variant="outline"><PackageCheck className="w-4 h-4 mr-2" /> Receive Products</Button>
             <Button variant="outline"><FileText className="w-4 h-4 mr-2" /> Generate Bill</Button>
             <Button variant="outline" className="px-2"><MoreVertical className="w-4 h-4 text-slate-500" /></Button>

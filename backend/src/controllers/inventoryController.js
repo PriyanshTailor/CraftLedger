@@ -45,7 +45,14 @@ export const getInventoryOverview = async (req, res, next) => {
 
 export const getInventoryProducts = async (req, res, next) => {
   try {
-    const products = await Product.find({ businessId: req.user.businessId, isActive: true })
+    const query = { businessId: req.user.businessId };
+    if (req.query.archived === 'true') {
+      query.$or = [{ isArchived: true }, { isActive: false }];
+    } else if (req.query.includeArchived !== 'true') {
+      query.isActive = true;
+      query.isArchived = { $ne: true };
+    }
+    const products = await Product.find(query)
       .populate('categoryId', 'name')
       .sort('name');
 

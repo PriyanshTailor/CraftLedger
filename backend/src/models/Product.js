@@ -14,6 +14,8 @@ const productSchema = new mongoose.Schema({
   reorderLevel: { type: Number, default: 0, min: 0 },
   inventoryValue: { type: Number, default: 0, min: 0 },
   isActive: { type: Boolean, default: true },
+  isArchived: { type: Boolean, default: false, index: true },
+  archivedAt: { type: Date, default: null },
 }, { timestamps: true });
 
 // Ensure SKU is unique within a business

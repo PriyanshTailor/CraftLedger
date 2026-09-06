@@ -2,7 +2,7 @@ import api from './api';
 
 export const inventoryService = {
   getOverview: () => api.get('/inventory/overview'),
-  getProducts: () => api.get('/inventory/products'),
+  getProducts: (params) => api.get('/inventory/products', { params }),
   getProduct: (id) => api.get(`/inventory/products/${id}`),
   getProductMovements: (id) => api.get(`/inventory/products/${id}/movements`),
   createAdjustment: (data) => api.post('/inventory/adjustments', data),

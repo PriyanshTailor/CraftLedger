@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema({
 
   isActive:      { type: Boolean, default: true },
   isArchived:    { type: Boolean, default: false },
+  archivedAt:    { type: Date, default: null },
   lastLoginAt:   { type: Date },
   createdBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   resetPasswordToken:  { type: String },

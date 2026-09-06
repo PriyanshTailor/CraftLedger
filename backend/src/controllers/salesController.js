@@ -158,18 +158,15 @@ export const confirmSalesOrder = async (req, res, next) => {
 };
 
 export const generateInvoice = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const businessId = req.user.businessId;
-    const order = await SalesOrder.findOne({ _id: req.params.id, businessId }).session(session);
+    const order = await SalesOrder.findOne({ _id: req.params.id, businessId });
     
     if (!order) throw new Error('Sales Order not found');
     if (['draft', 'cancelled'].includes(order.status)) throw new Error(`Cannot generate invoice for ${order.status} order`);
     
     // Check if invoice already exists
-    const existingInvoice = await CustomerInvoice.findOne({ salesOrderId: order._id }).session(session);
+    const existingInvoice = await CustomerInvoice.findOne({ salesOrderId: order._id });
     if (existingInvoice) throw new Error('Invoice already exists for this order');
 
     const invoiceNumber = await generateNextNumber(businessId, 'CustomerInvoice', 'INV');
@@ -178,7 +175,7 @@ export const generateInvoice = async (req, res, next) => {
     const dueDate = new Date();
     dueDate.setDate(dueDate.getDate() + 30);
 
-    const invoice = await CustomerInvoice.create([{
+    const invoice = await CustomerInvoice.create({
       businessId,
       invoiceNumber,
       salesOrderId: order._id,
@@ -191,18 +188,13 @@ export const generateInvoice = async (req, res, next) => {
       balanceDue: order.totalAmount,
       status: 'issued',
       createdBy: req.user._id
-    }], { session });
+    });
 
     order.status = 'processing';
-    await order.save({ session });
+    await order.save();
 
-    await session.commitTransaction();
-    session.endSession();
-
-    return sendSuccess(res, 201, 'Invoice generated successfully', invoice[0]);
+    return sendSuccess(res, 201, 'Invoice generated successfully', invoice);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
     return sendError(res, 400, error.message);
   }
 };

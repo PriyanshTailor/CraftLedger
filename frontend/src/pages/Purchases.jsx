@@ -8,6 +8,7 @@ import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
 import { Plus, Search, Filter, Trash2, Loader2, ShieldAlert, X } from 'lucide-react';
 import { purchaseService } from '../services/purchaseService';
 import { masterDataService } from '../services/masterDataService';
+import { validateNumber, validateRequired } from '../lib/validation';
 
 function CreatePurchaseOrderModal({ isOpen, onClose, onSubmitted }) {
   const [vendors, setVendors] = useState([]);
@@ -75,32 +76,32 @@ function CreatePurchaseOrderModal({ isOpen, onClose, onSubmitted }) {
     setSubmitting(true);
     
     try {
-      if (!formData.vendorId) throw new Error("Please select a vendor");
-      if (items.length === 0 || items.some(item => !item.productId || item.qty <= 0)) {
-        throw new Error("Add a material and a valid quantity to every purchase line");
+      if (validateRequired(formData.vendorId, 'Vendor')) throw new Error('Please select a vendor');
+      if (!formData.orderDate || (formData.expectedDeliveryDate && new Date(formData.expectedDeliveryDate) < new Date(formData.orderDate))) throw new Error('Delivery date must be on or after order date');
+      if (items.length === 0 || items.some(item => !item.productId || validateNumber(item.qty, 'Quantity', { min: 0.01 }) || validateNumber(item.unitCost, 'Unit cost', { min: 0 }))) {
+        throw new Error('Every purchase line needs a product, a positive quantity, and a non-negative unit cost');
       }
 
-      // Demo behavior: validate and acknowledge the form without sending a request or storing a record.
-      await new Promise(resolve => window.setTimeout(resolve, 350));
-      const vendor = vendors.find(item => item._id === formData.vendorId);
-      const previewId = `purchase-preview-${Date.now()}`;
-      onSubmitted({
-        _id: previewId,
-        isLocalPreview: true,
-        purchaseOrderNumber: `PO-PREVIEW-${previewId.slice(-5)}`,
-        vendorId: { _id: formData.vendorId, name: vendor?.name || 'Vendor' },
+      const response = await purchaseService.createOrder({
+        vendorId: formData.vendorId,
         orderDate: formData.orderDate,
-        expectedDeliveryDate: formData.expectedDeliveryDate || null,
-        items: items.map(item => ({ ...item, quantity: item.qty })),
-        totalAmount: total,
-        status: confirm ? 'confirmed' : 'draft',
-        paymentStatus: 'unpaid'
+        expectedDeliveryDate: formData.expectedDeliveryDate || undefined,
+        items: items.map(item => ({ productId: item.productId, quantity: item.qty })),
+        notes: formData.notes
       });
+      let savedOrder = response.data;
+      if (confirm) {
+        const confirmedResponse = await purchaseService.confirmOrder(savedOrder._id);
+        savedOrder = confirmedResponse.data;
+      }
+      onSubmitted(savedOrder);
       setFormData({ vendorId: '', orderDate: new Date().toISOString().split('T')[0], expectedDeliveryDate: '', notes: '' });
       setItems([{ id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitCost: 0, taxRate: 0 }]);
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to create purchase order');
+      setSubmitting(false);
+    } finally {
       setSubmitting(false);
     }
   };
@@ -134,7 +135,7 @@ function CreatePurchaseOrderModal({ isOpen, onClose, onSubmitted }) {
             <Button type="button" variant="outline" size="sm" onClick={addItem}><Plus className="w-3.5 h-3.5 mr-1.5" /> Add Line</Button>
           </div>
           <div className="border border-slate-200 rounded-lg overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm min-w-[600px]">
+            <table className="w-full text-sm min-w-150">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Product / Material</th>
@@ -340,7 +341,7 @@ export function Purchases() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-sm text-left min-w-[800px]">
+            <table className="w-full text-sm text-left min-w-200">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4 font-medium">PO #</th>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
 
-export function FormField({ label, required, children, className, hint }) {
+export function FormField({ label, required, children, className, hint, error }) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       {label && (
@@ -10,7 +10,7 @@ export function FormField({ label, required, children, className, hint }) {
         </label>
       )}
       {children}
-      {hint && <p className="text-xs text-slate-400">{hint}</p>}
+      {error ? <p className="text-xs text-red-600" role="alert">{error}</p> : hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
@@ -22,6 +22,7 @@ export function Input({ className, ...props }) {
         'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800',
         'focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal transition-all bg-white',
         'placeholder:text-slate-300',
+        props['aria-invalid'] ? 'border-red-300 focus:border-red-500 focus:ring-red-100' : '',
         className
       )}
       {...props}
@@ -35,6 +36,7 @@ export function Select({ className, children, ...props }) {
       className={cn(
         'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800',
         'focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal transition-all bg-white',
+        props['aria-invalid'] ? 'border-red-300 focus:border-red-500 focus:ring-red-100' : '',
         className
       )}
       {...props}
@@ -52,6 +54,7 @@ export function Textarea({ className, ...props }) {
         'w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800',
         'focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal transition-all bg-white resize-none',
         'placeholder:text-slate-300',
+        props['aria-invalid'] ? 'border-red-300 focus:border-red-500 focus:ring-red-100' : '',
         className
       )}
       {...props}
