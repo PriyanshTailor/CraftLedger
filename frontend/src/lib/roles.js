@@ -18,6 +18,16 @@ export const ROLE_LABELS = {
 
 // Role-specific permission sets (frontend UI control only — backend enforces separately)
 export const ROLE_PERMISSIONS = {
+  platform_admin: [
+    'view_super_admin_panel', 'create_business_owner', 'manage_users', 'view_audit_logs',
+    'view_dashboard', 'view_contacts', 'create_contact', 'update_contact', 'archive_contact',
+    'view_products', 'create_product', 'update_product', 'archive_product',
+    'view_sales', 'create_sales_invoice', 'update_sales_invoice', 'cancel_sales_invoice',
+    'view_purchases', 'create_purchase_bill', 'update_purchase_bill',
+    'view_inventory', 'view_accounting', 'view_ledger', 'view_payments', 'record_payment',
+    'view_reports', 'view_budgeting', 'view_ai_cfo', 'view_explainable_pl', 'view_business_health',
+    'assign_roles', 'manage_settings'
+  ],
   business_owner: [
     'view_dashboard', 'view_contacts', 'create_contact', 'update_contact', 'archive_contact',
     'view_products', 'create_product', 'update_product', 'archive_product',

@@ -11,7 +11,8 @@ import {
   getAdjustments,
   getLowStockProducts,
   getValuation,
-  getProfitability
+  getProfitability,
+  getSlowMovingInventory
 } from '../controllers/inventoryController.js';
 
 const router = express.Router();
@@ -19,6 +20,7 @@ const router = express.Router();
 router.use(authenticateUser);
 
 router.get('/overview', getInventoryOverview);
+router.get('/slow-moving', getSlowMovingInventory);
 
 router.route('/products')
   .get(getInventoryProducts);

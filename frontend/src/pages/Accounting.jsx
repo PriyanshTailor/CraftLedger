@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
-import { Plus, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Loader2, TrendingUp } from 'lucide-react';
 import { accountingService } from '../services/accountingService';
 import { cn } from '../lib/utils';
 
@@ -12,9 +13,10 @@ const accountTypeColors = {
   asset: 'secondary', liability: 'destructive', equity: 'primary', revenue: 'success', expense: 'warning',
 };
 
-function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts }) {
+function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journals }) {
   const [formData, setFormData] = useState({
     entryDate: new Date().toISOString().split('T')[0],
+    journalId: '',
     description: '',
     referenceType: 'manual',
     referenceId: ''
@@ -45,9 +47,9 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts }) {
     try {
       const payload = {
         entryDate: formData.entryDate,
+        journalId: formData.journalId,
         description: formData.description,
         referenceType: formData.referenceType,
-        referenceId: formData.referenceId,
         lines: lines.map(l => {
           const acc = accounts.find(a => a._id === l.accountId);
           return {
@@ -59,6 +61,7 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts }) {
           };
         }).filter(l => l.debit > 0 || l.credit > 0)
       };
+      if (/^[a-f\d]{24}$/i.test(formData.referenceId.trim())) payload.referenceId = formData.referenceId.trim();
 
       await accountingService.createJournalEntry(payload);
       onRefresh();
@@ -79,7 +82,13 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts }) {
             <Input type="date" value={formData.entryDate} onChange={e => setFormData({...formData, entryDate: e.target.value})} />
           </FormField>
           <FormField label="Description">
-            <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Entry description" />
+            <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Entry description" required />
+          </FormField>
+          <FormField label="Journal" required>
+            <Select value={formData.journalId} onChange={e => setFormData({...formData, journalId: e.target.value})} required>
+              <option value="">Select journal</option>
+              {journals.map(journal => <option key={journal._id} value={journal._id}>{journal.code} - {journal.name}</option>)}
+            </Select>
           </FormField>
           <FormField label="Reference">
             <Input value={formData.referenceId} onChange={e => setFormData({...formData, referenceId: e.target.value})} placeholder="e.g. INV-2026-0050" />
@@ -163,6 +172,7 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts }) {
 export function Accounting() {
   const [accounts, setAccounts] = useState([]);
   const [journalEntries, setJournalEntries] = useState([]);
+  const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('chart');
@@ -171,14 +181,16 @@ export function Accounting() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [accRes, jeRes] = await Promise.all([
+      const [accRes, jeRes, journalRes] = await Promise.all([
         accountingService.getAccounts(),
-        accountingService.getJournalEntries()
+        accountingService.getJournalEntries(),
+        accountingService.getJournals()
       ]);
       // Master-data list responses are paginated ({ docs, total, ... }),
       // while journal entries are returned as a plain array.
       setAccounts(Array.isArray(accRes.data) ? accRes.data : (accRes.data?.docs || []));
       setJournalEntries(Array.isArray(jeRes.data) ? jeRes.data : (jeRes.data?.docs || []));
+      setJournals(Array.isArray(journalRes.data) ? journalRes.data : (journalRes.data?.docs || []));
       setError(null);
     } catch (err) {
       setError("Failed to load accounting data");
@@ -198,14 +210,28 @@ export function Accounting() {
 
   return (
     <div className="space-y-6">
-      <CreateJournalEntryModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onRefresh={fetchData} accounts={accounts} />
+      <CreateJournalEntryModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onRefresh={fetchData} accounts={accounts} journals={journals} />
 
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
           <h2 className="text-2xl font-bold text-navy mb-1">Accounting</h2>
-          <p className="text-slate-500">Chart of accounts, journal entries, and ledger.</p>
+          <p className="text-slate-500 text-sm">Chart of accounts, journal entries, and general ledger.</p>
         </div>
-        <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> New Journal Entry</Button>
+        <div className="flex items-center gap-3">
+          <Button
+            asChild
+            variant="outline"
+            className="border-blue-200 text-royal bg-blue-50/60 hover:bg-blue-100/70 font-semibold text-xs h-9"
+          >
+            <Link to="/dashboard/cash-flow-forecast">
+              <TrendingUp className="w-4 h-4 mr-1.5 text-royal" />
+              Cash Flow Forecast
+            </Link>
+          </Button>
+          <Button onClick={() => setModalOpen(true)} className="text-xs h-9">
+            <Plus className="w-4 h-4 mr-1.5" /> New Journal Entry
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit">

@@ -8,15 +8,12 @@ import { generateNextNumber } from '../utils/numberGenerator.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 
 export const createPurchaseOrder = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const { vendorId, expectedDeliveryDate, items, notes } = req.body;
+    const { vendorId, orderDate, expectedDeliveryDate, items, notes } = req.body;
     const businessId = req.user.businessId;
 
     // Validate Vendor
-    const vendor = await Contact.findOne({ _id: vendorId, businessId, contactType: 'vendor', isActive: true }).session(session);
+    const vendor = await Contact.findOne({ _id: vendorId, businessId, contactType: { $in: ['vendor', 'customer_and_vendor'] }, isActive: true });
     if (!vendor) {
       throw new Error('Vendor not found or inactive');
     }
@@ -26,7 +23,7 @@ export const createPurchaseOrder = async (req, res, next) => {
     const orderItems = [];
 
     for (const item of items) {
-      const product = await Product.findOne({ _id: item.productId, businessId, isActive: true }).session(session);
+      const product = await Product.findOne({ _id: item.productId, businessId, isActive: true });
       if (!product) {
         throw new Error(`Product ${item.productId} not found or inactive`);
       }
@@ -55,10 +52,11 @@ export const createPurchaseOrder = async (req, res, next) => {
     const totalAmount = subtotal + taxAmount;
     const purchaseOrderNumber = await generateNextNumber(businessId, 'PurchaseOrder', 'PO');
 
-    const purchaseOrder = await PurchaseOrder.create([{
+    const [purchaseOrder] = await PurchaseOrder.create([{
       businessId,
       purchaseOrderNumber,
       vendorId,
+      orderDate: orderDate || undefined,
       expectedDeliveryDate,
       items: orderItems,
       subtotal,
@@ -66,16 +64,10 @@ export const createPurchaseOrder = async (req, res, next) => {
       totalAmount,
       notes,
       createdBy: req.user._id
-    }], { session });
+    }]);
 
-    await session.commitTransaction();
-    session.endSession();
-
-    return sendSuccess(res, 201, 'Purchase Order created successfully', purchaseOrder[0]);
+    return sendSuccess(res, 201, 'Purchase Order created successfully', purchaseOrder);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    
     if (error.message.includes('not found')) {
       return sendError(res, 400, error.message);
     }

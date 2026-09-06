@@ -4,7 +4,7 @@ import VendorBill from '../models/VendorBill.js';
 import Product from '../models/Product.js';
 import JournalEntry from '../models/JournalEntry.js';
 import { sendSuccess } from '../utils/response.js';
-import { calculateHealthScore, calculateCashFlowForecast, detectProfitLeaks, calculateProductProfitability } from '../services/intelligenceService.js';
+import { calculateHealthScore, calculateCashFlowForecast, detectProfitLeaks, calculateProductProfitability, calculateSlowMovingInventory } from '../services/intelligenceService.js';
 
 export const getDashboardSummary = async (req, res, next) => {
   try {
@@ -16,6 +16,7 @@ export const getDashboardSummary = async (req, res, next) => {
       cashFlowForecast,
       profitLeaks,
       productProfitability,
+      slowMovingData,
       accounts,
       recentTransactions,
       outstandingInvoices,
@@ -25,6 +26,7 @@ export const getDashboardSummary = async (req, res, next) => {
       calculateCashFlowForecast(businessId, 30),
       detectProfitLeaks(businessId),
       calculateProductProfitability(businessId),
+      calculateSlowMovingInventory(businessId, { horizonDays: 90 }),
       Account.find({ businessId }).lean(),
       JournalEntry.find({ businessId, status: 'posted' }).sort('-entryDate -createdAt').limit(5).lean(),
       CustomerInvoice.find({ businessId, status: { $in: ['issued', 'partially_paid', 'overdue'] } }).sort('dueDate').limit(5).populate('customerId', 'name').lean(),
@@ -95,7 +97,7 @@ export const getDashboardSummary = async (req, res, next) => {
         healthScore.risks.length > 0 ? { type: 'warning', message: healthScore.risks[0] } : null,
         healthScore.recommendations.length > 0 ? { type: 'success', message: healthScore.recommendations[0] } : null
       ].filter(Boolean),
-      profitLeaks: profitLeaks.slice(0, 3), // Top 3 leaks
+      profitLeaks: (Array.isArray(profitLeaks) ? profitLeaks : (profitLeaks?.leaks || [])).slice(0, 4), // Top 4 leaks
       productProfitability: productProfitability.slice(0, 5), // Top 5 products
       recentTransactions: recentTransactions.map(tx => ({
         id: tx._id,
@@ -116,7 +118,15 @@ export const getDashboardSummary = async (req, res, next) => {
         vendor: bill.vendorId ? bill.vendorId.name : 'Unknown',
         amount: bill.balanceDue,
         dueDate: bill.dueDate
-      }))
+      })),
+      inventoryInsights: {
+        totalValue: inventoryValue || slowMovingData.totalInventoryValue,
+        slowMoving: slowMovingData.slowMovingCount + slowMovingData.deadStockCount,
+        deadStock: slowMovingData.deadStockCount,
+        lowStock: slowMovingData.lowStockCount,
+        tiedUpCapital: slowMovingData.totalAtRiskCapital,
+        annualCarryingCostWaste: slowMovingData.annualCarryingCostWaste
+      }
     };
 
     return sendSuccess(res, 200, 'Dashboard summary retrieved successfully', dashboardData);

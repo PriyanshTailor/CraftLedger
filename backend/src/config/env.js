@@ -11,4 +11,6 @@ export const env = {
   CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:5173',
   PLATFORM_ADMIN_EMAIL: process.env.PLATFORM_ADMIN_EMAIL,
   PLATFORM_ADMIN_INITIAL_PASSWORD: process.env.PLATFORM_ADMIN_INITIAL_PASSWORD,
+  GROQ_API_KEY: process.env.GROQ_API_KEY,
+  GROQ_MODEL: process.env.GROQ_MODEL || 'qwen/qwen3.8-27b'
 };

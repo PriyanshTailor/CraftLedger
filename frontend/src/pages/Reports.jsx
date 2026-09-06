@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Download, FileText, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Download, FileText, TrendingUp, TrendingDown, Minus, Sparkles, BarChart3, ShieldAlert } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend
@@ -130,7 +131,25 @@ export function Reports() {
           <h2 className="text-xl font-bold text-navy mb-0.5">Financial Reports</h2>
           <p className="text-sm text-slate-500">View and export your company's financial statements.</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button asChild variant="outline" size="sm" className="text-royal border-royal/30 hover:bg-blue-50 font-semibold text-xs">
+            <Link to="/dashboard/reports/explainable-pl" className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-royal" />
+              Explainable P&L
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="text-blue-700 border-blue-200 hover:bg-blue-50 font-semibold text-xs">
+            <Link to="/dashboard/cash-flow-forecast" className="flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-royal" />
+              Cash Flow Forecast
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="text-rose-700 border-rose-200 hover:bg-rose-50 font-semibold text-xs">
+            <Link to="/dashboard/profit-leaks" className="flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+              Profit Leaks
+            </Link>
+          </Button>
           <select
             value={period}
             onChange={e => setPeriod(e.target.value)}

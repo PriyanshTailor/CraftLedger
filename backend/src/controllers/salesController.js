@@ -8,15 +8,12 @@ import { generateNextNumber } from '../utils/numberGenerator.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 
 export const createSalesOrder = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const { customerId, expectedDeliveryDate, items, discount = 0, notes } = req.body;
+    const { customerId, orderDate, expectedDeliveryDate, items, discount = 0, notes } = req.body;
     const businessId = req.user.businessId;
 
     // Validate Customer
-    const customer = await Contact.findOne({ _id: customerId, businessId, contactType: 'customer', isActive: true }).session(session);
+    const customer = await Contact.findOne({ _id: customerId, businessId, contactType: { $in: ['customer', 'customer_and_vendor'] }, isActive: true });
     if (!customer) {
       throw new Error('Customer not found or inactive');
     }
@@ -27,7 +24,7 @@ export const createSalesOrder = async (req, res, next) => {
 
     // Process each item to fetch correct pricing from DB (Do NOT trust frontend)
     for (const item of items) {
-      const product = await Product.findOne({ _id: item.productId, businessId, isActive: true }).session(session);
+      const product = await Product.findOne({ _id: item.productId, businessId, isActive: true });
       if (!product) {
         throw new Error(`Product ${item.productId} not found or inactive`);
       }
@@ -62,10 +59,11 @@ export const createSalesOrder = async (req, res, next) => {
 
     const orderNumber = await generateNextNumber(businessId, 'SalesOrder', 'SO');
 
-    const salesOrder = await SalesOrder.create([{
+    const [salesOrder] = await SalesOrder.create([{
       businessId,
       orderNumber,
       customerId,
+      orderDate: orderDate || undefined,
       expectedDeliveryDate,
       items: orderItems,
       subtotal: finalSubtotal,
@@ -74,16 +72,10 @@ export const createSalesOrder = async (req, res, next) => {
       totalAmount,
       notes,
       createdBy: req.user._id
-    }], { session });
+    }]);
 
-    await session.commitTransaction();
-    session.endSession();
-
-    return sendSuccess(res, 201, 'Sales Order created successfully', salesOrder[0]);
+    return sendSuccess(res, 201, 'Sales Order created successfully', salesOrder);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    
     if (error.message.includes('not found')) {
       return sendError(res, 400, error.message);
     }

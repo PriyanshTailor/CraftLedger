@@ -8,20 +8,39 @@ import { sendSuccess } from '../utils/response.js';
 const router = express.Router();
 
 router.use(authenticateUser);
-router.use(authorizeRoles(ROLES.BUSINESS_OWNER));
+router.use(authorizeRoles(ROLES.PLATFORM_ADMIN, ROLES.BUSINESS_OWNER));
 
 router.get('/', async (req, res, next) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 50, businessId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const logs = await AuditLog.find({ businessId: req.user.businessId })
+    // Platform admin can see all businesses or filter by query, business owner sees their own
+    const filter = {};
+    if (req.user.role === ROLES.PLATFORM_ADMIN) {
+      if (businessId) filter.businessId = businessId;
+    } else {
+      filter.businessId = req.user.businessId;
+    }
+
+    const rawLogs = await AuditLog.find(filter)
       .sort('-createdAt')
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('userId', 'name email role');
-    
-    const total = await AuditLog.countDocuments({ businessId: req.user.businessId });
+      .populate('userId', 'name email role')
+      .populate('businessId', 'businessName');
+
+    const total = await AuditLog.countDocuments(filter);
+
+    // Format logs so both module/description and entity/details are populated for frontend
+    const logs = rawLogs.map(l => {
+      const obj = l.toObject();
+      return {
+        ...obj,
+        entity: obj.module || 'System',
+        details: obj.description || (obj.businessId?.businessName ? `Tenant: ${obj.businessId.businessName}` : '—')
+      };
+    });
 
     return sendSuccess(res, 200, 'Audit logs retrieved', {
       logs, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit))

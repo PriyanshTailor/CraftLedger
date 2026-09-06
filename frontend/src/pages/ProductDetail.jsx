@@ -49,7 +49,7 @@ export function ProductDetail() {
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-2 text-sm text-slate-500 mb-4">
-          <Link to="/inventory" className="hover:text-royal flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Inventory</Link>
+          <Link to="/dashboard/inventory" className="hover:text-royal flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Inventory Intelligence</Link>
           <span>/</span>
           <span className="text-slate-800">{product.name}</span>
         </div>

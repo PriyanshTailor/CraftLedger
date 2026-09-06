@@ -11,8 +11,6 @@ import {
 } from '../services/accountingService.js';
 
 export const createEntry = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     const businessId = req.user.businessId;
@@ -20,21 +18,17 @@ export const createEntry = async (req, res, next) => {
 
     // Fetch account names for snapshots
     for (const line of entryData.lines) {
-      const acc = await Account.findOne({ _id: line.accountId, businessId }).session(session);
+      const acc = await Account.findOne({ _id: line.accountId, businessId });
       if (!acc) throw new Error(`Account ${line.accountId} not found`);
       line.accountNameSnapshot = acc.accountName;
     }
 
-    const entry = await createJournalEntry(businessId, entryData, session);
+    const entry = await createJournalEntry(businessId, entryData);
 
-    await session.commitTransaction();
-    session.endSession();
 
     return sendSuccess(res, 201, 'Journal Entry created successfully', entry);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return sendError(res, 400, error.message);
+            return sendError(res, 400, error.message);
   }
 };
 
@@ -55,7 +49,7 @@ export const getEntryById = async (req, res, next) => {
     const entry = await JournalEntry.findOne({ _id: req.params.id, businessId: req.user.businessId })
       .populate('journalId', 'name')
       .populate('createdBy', 'name');
-    
+
     if (!entry) return sendError(res, 404, 'Journal entry not found');
     return sendSuccess(res, 200, 'Journal entry retrieved', entry);
   } catch (error) {
@@ -64,38 +58,26 @@ export const getEntryById = async (req, res, next) => {
 };
 
 export const postEntry = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
-    const entry = await postJournalEntry(req.params.id, req.user.businessId, session);
-    
-    await session.commitTransaction();
-    session.endSession();
+    const entry = await postJournalEntry(req.params.id, req.user.businessId);
+
 
     return sendSuccess(res, 200, 'Journal Entry posted successfully', entry);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return sendError(res, 400, error.message);
+            return sendError(res, 400, error.message);
   }
 };
 
 export const reverseEntry = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
-    const reversal = await reverseJournalEntry(req.params.id, req.user.businessId, req.user._id, session);
-    
-    await session.commitTransaction();
-    session.endSession();
+    const reversal = await reverseJournalEntry(req.params.id, req.user.businessId, req.user._id);
+
 
     return sendSuccess(res, 201, 'Journal Entry reversed successfully', reversal);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return sendError(res, 400, error.message);
+            return sendError(res, 400, error.message);
   }
 };
 

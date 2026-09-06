@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+.pnpm-store/
+dist/
+build/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/

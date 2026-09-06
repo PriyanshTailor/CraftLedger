@@ -32,14 +32,15 @@ function CreateBudgetModal({ isOpen, onClose, onRefresh }) {
     setSubmitting(true);
     setError('');
     try {
-      await budgetService.createBudget({
+      const payload = {
         name: formData.name,
         periodStart: formData.periodStart,
         periodEnd: formData.periodEnd,
         plannedAmount: Number(formData.plannedAmount),
-        responsiblePerson: formData.responsiblePerson,
         status: 'active'
-      });
+      };
+      if (/^[a-f\d]{24}$/i.test(formData.responsiblePerson.trim())) payload.responsiblePerson = formData.responsiblePerson.trim();
+      await budgetService.createBudget(payload);
       onRefresh();
       onClose();
     } catch (err) {

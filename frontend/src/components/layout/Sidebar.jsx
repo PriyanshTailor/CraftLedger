@@ -3,7 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, ShoppingBag, Calculator, Package, PieChart,
   FileText, BrainCircuit, Settings, LogOut, Activity, Users, Store,
-  User, CreditCard, Receipt, BookOpen, AlertOctagon, UserCog, FileCheck2
+  User, CreditCard, Receipt, BookOpen, AlertOctagon, UserCog, FileCheck2, ShieldCheck, ShieldAlert,
+  TrendingUp, BarChart3, AlertTriangle
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import logo from '../../assets/logo.png';
@@ -11,6 +12,24 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../lib/roles';
 
 // Sidebar config per role
+const PLATFORM_ADMIN_SECTIONS = [
+  {
+    label: 'Platform Administration',
+    items: [
+      { name: 'Platform Overview', path: '/platform', icon: ShieldCheck },
+      { name: 'User Directory', path: '/platform/users', icon: UserCog },
+      { name: 'Audit Logs', path: '/platform/audit-logs', icon: BookOpen },
+    ]
+  },
+  {
+    label: 'System Quick Nav',
+    items: [
+      { name: 'Business View', path: '/dashboard', icon: LayoutDashboard },
+      { name: 'Platform Settings', path: '/dashboard/settings', icon: Settings },
+    ]
+  }
+];
+
 const ADMIN_SECTIONS = [
   {
     label: 'Main Menu',
@@ -27,8 +46,8 @@ const ADMIN_SECTIONS = [
   {
     label: 'Intelligence',
     items: [
-      { name: 'AI CFO', path: '/dashboard/ai-cfo', icon: BrainCircuit, special: true },
-      { name: 'Explainable P&L', path: '/dashboard/reports/explainable-pl', icon: Activity },
+      { name: 'AI CFO', path: '/dashboard/ai-cfo', icon: BrainCircuit },
+      { name: 'Sales Forecast', path: '/dashboard/sales-forecast', icon: BarChart3 },
     ]
   },
   {
@@ -74,12 +93,13 @@ const CONTACT_SECTIONS = [
       { name: 'My Bills', path: '/contact/bills', icon: Receipt },
       { name: 'My Payments', path: '/contact/payments', icon: CreditCard },
       { name: 'My Contract', path: '/contact/contract', icon: FileCheck2 },
-      { name: 'Make Payment', path: '/contact/make-payment', icon: AlertOctagon, special: true },
+      { name: 'Make Payment', path: '/contact/make-payment', icon: AlertOctagon },
     ]
   }
 ];
 
 function getSections(role, contactType) {
+  if (role === ROLES.PLATFORM_ADMIN) return PLATFORM_ADMIN_SECTIONS;
   if (role === ROLES.BUSINESS_OWNER) return ADMIN_SECTIONS;
   if (role === ROLES.ACCOUNTANT) return ACCOUNTANT_SECTIONS;
   if (role === ROLES.CONTACT) {
@@ -135,15 +155,18 @@ export function Sidebar({ mobileOpen, setMobileOpen, collapsed }) {
                 end={item.path === '/dashboard' || item.path === '/contact'}
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) => cn(
-                  "flex items-center mx-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group shrink-0",
+                  "flex items-center mx-3 px-3 py-2.5 rounded-lg text-sm transition-all group shrink-0",
                   collapsed ? "justify-center" : "gap-3",
-                  item.special
-                    ? (isActive ? 'bg-royal text-white shadow-sm' : 'text-royal bg-blue-50 border border-blue-100 hover:bg-blue-100')
-                    : (isActive ? "bg-blue-50 text-royal" : "text-slate-500 hover:text-slate-900 hover:bg-slate-50")
+                  isActive
+                    ? "bg-slate-100 text-slate-900 font-semibold"
+                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium"
                 )}
                 title={collapsed ? item.name : undefined}
               >
-                <item.icon className={cn("w-5 h-5 shrink-0", collapsed ? "mx-auto" : "")} />
+                <item.icon className={cn(
+                  "w-5 h-5 shrink-0 transition-colors",
+                  collapsed ? "mx-auto" : ""
+                )} />
                 {!collapsed && <span className="truncate">{item.name}</span>}
               </NavLink>
             ))}

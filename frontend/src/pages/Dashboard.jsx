@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { 
+import { Link, useNavigate } from 'react-router-dom';
+import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { 
-  TrendingUp, TrendingDown, AlertTriangle, Lightbulb, 
-  ArrowRight, ShieldCheck, PieChart, Info, ArrowUpRight, ArrowDownRight, Search
+import {
+  TrendingUp, TrendingDown, AlertTriangle, Lightbulb,
+  ArrowRight, ShieldCheck, PieChart, Info, ArrowUpRight, ArrowDownRight, Search,
+  BarChart3, Brain
 } from 'lucide-react';
 import { dashboardService } from '../services/dashboardService';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
@@ -16,6 +17,7 @@ import { ROLES } from '../lib/roles';
 
 export function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -28,7 +30,7 @@ export function Dashboard() {
           ? await dashboardService.getAccountantSummary()
           : await dashboardService.getSummary();
         const bd = res.data; // backend data
-        
+
         // Format currency helper
         const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val);
 
@@ -36,6 +38,7 @@ export function Dashboard() {
         const adaptedData = {
           healthScore: bd.health.score,
           healthStatus: bd.health.status,
+          healthComponents: bd.health.components,
           kpis: {
             revenue: { value: formatCurrency(bd.metrics.revenue), change: bd.metrics.revenueTrend, comparison: 'vs last month' },
             netProfit: { value: formatCurrency(bd.metrics.netProfit), change: bd.metrics.profitTrend, comparison: 'vs last month' },
@@ -90,7 +93,7 @@ export function Dashboard() {
   if (loading) {
     return <div className="flex h-64 items-center justify-center text-slate-500">Loading dashboard data...</div>;
   }
-  
+
   if (error) {
     return (
       <div className="flex flex-col h-64 items-center justify-center text-red-500 gap-4">
@@ -109,7 +112,7 @@ export function Dashboard() {
       {/* Top Section: Health */}
       <div className="flex flex-col md:flex-row gap-6 justify-between items-start md:items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h2 className="text-2xl font-bold text-navy mb-1">Good morning, John</h2>
+          <h2 className="text-2xl font-bold text-navy mb-1">Good day, {user?.name || 'Business Owner'}</h2>
           <p className="text-slate-500">Here is your business financial overview.</p>
         </div>
         <div className="flex items-center gap-6">
@@ -117,10 +120,39 @@ export function Dashboard() {
             <span className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-1">Business Health</span>
             <div className="flex items-center gap-3">
               <span className="text-3xl font-bold text-navy">{data.healthScore} <span className="text-lg text-slate-400 font-normal">/ 100</span></span>
-              <Badge variant="success" className="px-3 py-1 text-sm"><ShieldCheck className="w-4 h-4 mr-1"/> {data.healthStatus}</Badge>
+              <Badge
+                variant={
+                  data.healthScore >= 85
+                    ? 'success'
+                    : data.healthScore >= 70
+                    ? 'primary'
+                    : data.healthScore >= 55
+                    ? 'warning'
+                    : 'destructive'
+                }
+                className="px-3 py-1 text-sm font-semibold"
+              >
+                <ShieldCheck className="w-4 h-4 mr-1"/> {data.healthStatus}
+              </Badge>
             </div>
+            {data.healthComponents && (
+              <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-500 flex-wrap justify-end">
+                <span title="Profitability Health">Profit: <strong className="text-slate-800">{data.healthComponents.profitability}</strong></span>
+                <span>•</span>
+                <span title="Liquidity & Cash Position">Cash: <strong className="text-slate-800">{data.healthComponents.cashPosition}</strong></span>
+                <span>•</span>
+                <span title="Receivables & Debtors Collection">Payments: <strong className="text-slate-800">{data.healthComponents.paymentPerformance}</strong></span>
+                <span>•</span>
+                <span title="Expense & Overhead Control">Expenses: <strong className="text-slate-800">{data.healthComponents.expenseControl}</strong></span>
+              </div>
+            )}
           </div>
-          <Button variant="outline">View analysis</Button>
+          <Button asChild variant="outline" className="text-royal border-royal/30 hover:bg-blue-50 font-semibold shadow-sm">
+            <Link to="/dashboard/reports/explainable-pl" className="flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4 text-royal" />
+              View analytics
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -141,13 +173,22 @@ export function Dashboard() {
           </CardContent>
         </Card>
         {/* Net Profit */}
-        <Card>
+        <Card
+          className="hover:border-royal/50 hover:shadow-sm transition-all cursor-pointer group"
+          onClick={() => navigate('/dashboard/reports/explainable-pl')}
+          title="Click to view explainable profit & loss analytics"
+        >
           <CardContent className="p-5">
-            <div className="text-sm font-medium text-slate-500 mb-2">Net Profit</div>
+            <div className="flex items-center justify-between text-sm font-medium text-slate-500 mb-2">
+              <span>Net Profit</span>
+              <span className="text-[10px] text-royal font-semibold opacity-0 group-hover:opacity-100 transition-opacity flex items-center">
+                Explain <ArrowRight className="w-2.5 h-2.5 ml-0.5" />
+              </span>
+            </div>
             <div className="text-2xl font-bold text-navy mb-2">{data.kpis.netProfit.value}</div>
             <div className="flex items-center text-xs">
-              <span className="text-red-600 flex items-center font-medium">
-                <ArrowDownRight className="w-3 h-3 mr-0.5" />
+              <span className="text-green-600 flex items-center font-medium">
+                <ArrowUpRight className="w-3 h-3 mr-0.5" />
                 {Math.abs(data.kpis.netProfit.change)}%
               </span>
               <span className="text-slate-400 ml-1.5">{data.kpis.netProfit.comparison}</span>
@@ -205,11 +246,18 @@ export function Dashboard() {
               <CardTitle>Financial Performance</CardTitle>
               <CardDescription>Revenue, expenses and profit over time.</CardDescription>
             </div>
-            <select className="text-sm border-slate-200 rounded-md bg-white focus:ring-royal px-3 py-1.5 border outline-none">
-              <option>Last 6 months</option>
-              <option>Last 3 months</option>
-              <option>This Year</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="ghost" size="sm" className="text-xs text-royal font-semibold hover:bg-blue-50">
+                <Link to="/dashboard/reports/explainable-pl" className="flex items-center gap-1">
+                  View Analytics <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </Button>
+              <select className="text-sm border-slate-200 rounded-md bg-white focus:ring-royal px-3 py-1.5 border outline-none">
+                <option>Last 6 months</option>
+                <option>Last 3 months</option>
+                <option>This Year</option>
+              </select>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="h-[300px] w-full mt-4">
@@ -255,7 +303,7 @@ export function Dashboard() {
               </div>
             </div>
             <Button asChild variant="outline" className="w-full mt-4 bg-white">
-              <Link to="/reports">View forecast details</Link>
+              <Link to="/dashboard/cash-flow-forecast">View forecast details</Link>
             </Button>
           </CardContent>
         </Card>
@@ -281,10 +329,10 @@ export function Dashboard() {
               </div>
               <p className="text-sm text-slate-600 mb-4">A purchase of ₹5,00,000 from "Premium Woods Ltd" is significantly higher than the usual transaction amount.</p>
               <Button asChild size="sm" variant="outline" className="text-xs">
-                <Link to="/vendors/Premium Woods Ltd">Investigate <ArrowRight className="w-3 h-3 ml-2" /></Link>
+                <Link to="/dashboard/anomalies">Investigate <ArrowRight className="w-3 h-3 ml-2" /></Link>
               </Button>
             </div>
-            
+
             <div className="p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-2">
@@ -295,40 +343,56 @@ export function Dashboard() {
               </div>
               <p className="text-sm text-slate-600 mb-4">Office Chairs generate the highest profit margin (43%). Consider increasing stock and marketing spend for this category.</p>
               <Button asChild size="sm" variant="outline" className="text-xs">
-                <Link to="/inventory">View Products <ArrowRight className="w-3 h-3 ml-2" /></Link>
+                <Link to="/dashboard/inventory">View Products <ArrowRight className="w-3 h-3 ml-2" /></Link>
               </Button>
             </div>
           </CardContent>
         </Card>
 
         {/* Profit Leaks */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-700">
-              <AlertTriangle className="w-5 h-5" />
-              Potential Profit Leaks
-            </CardTitle>
-            <CardDescription>Areas requiring investigation to prevent financial loss.</CardDescription>
+        <Card className="border-rose-100 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-rose-700">
+                <AlertTriangle className="w-5 h-5" />
+                Potential Profit Leaks
+              </CardTitle>
+              <CardDescription>Areas requiring investigation to prevent margin loss.</CardDescription>
+            </div>
+            <Button asChild variant="ghost" size="sm" className="text-xs text-royal font-semibold hover:bg-blue-50">
+              <Link to="/dashboard/profit-leaks" className="flex items-center gap-1">
+                View All <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {data.profitLeaks.map(leak => (
-                <div key={leak.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-4">
+            <div className="space-y-3">
+              {data.profitLeaks.map((leak, idx) => (
+                <div key={leak.id || idx} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-rose-50/20 hover:border-rose-200 transition-colors">
+                  <div className="flex items-center gap-3">
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium text-slate-900">{leak.category}</span>
-                      <span className="text-xs font-semibold text-red-600">{leak.amount} potential impact</span>
+                      <span className="text-sm font-semibold text-slate-900">{leak.category || leak.title}</span>
+                      <span className="text-xs font-semibold text-rose-600">
+                        {leak.amount ? (typeof leak.amount === 'number' ? `₹${leak.amount.toLocaleString('en-IN')}` : leak.amount) : 'Action required'} bleed exposure
+                      </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant={leak.severity === 'High Priority' ? 'destructive' : 'warning'}>{leak.severity}</Badge>
-                    <Button asChild size="sm" variant="ghost" className="px-2">
-                      <Link to="/reports/explainable-pl"><Search className="w-4 h-4 text-slate-400" /></Link>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={leak.severity === 'Critical' || leak.severity === 'High Priority' ? 'destructive' : 'warning'} className="text-[10px]">
+                      {leak.severity}
+                    </Badge>
+                    <Button asChild size="sm" variant="ghost" className="px-2 h-7 text-xs text-royal hover:bg-blue-50">
+                      <Link to="/dashboard/profit-leaks">Audit <ArrowRight className="w-3 h-3 ml-1" /></Link>
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
+            <Button asChild variant="outline" className="w-full mt-4 text-xs font-semibold text-slate-700 hover:text-royal hover:border-royal">
+              <Link to="/dashboard/profit-leaks">
+                Open Profit Leak Detection Engine <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -341,7 +405,9 @@ export function Dashboard() {
               <CardTitle>Product Profitability</CardTitle>
               <CardDescription>Top performing categories by margin.</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" className="text-royal">View all</Button>
+            <Button asChild variant="ghost" size="sm" className="text-royal">
+              <Link to="/dashboard/inventory">View all</Link>
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -390,7 +456,7 @@ export function Dashboard() {
                 <span className="text-xl font-bold text-red-600">{data.inventoryInsights.lowStock} <span className="text-sm font-normal text-red-500">products</span></span>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-100 mb-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-amber-100 rounded-md text-amber-700">
@@ -401,10 +467,14 @@ export function Dashboard() {
                   <p className="text-xs text-amber-700 mt-0.5">{data.inventoryInsights.slowMoving} products have not sold in 90 days.</p>
                 </div>
               </div>
-              <Button size="sm" variant="outline" className="bg-white border-amber-200 text-amber-800 hover:bg-amber-100">Review</Button>
+              <Button asChild size="sm" variant="outline" className="bg-white border-amber-200 text-amber-800 hover:bg-amber-100">
+                <Link to="/dashboard/inventory/slow-moving">Review Prediction</Link>
+              </Button>
             </div>
-            
-            <Button variant="outline" className="w-full">View comprehensive inventory</Button>
+
+            <Button asChild variant="outline" className="w-full">
+              <Link to="/dashboard/inventory">View comprehensive inventory</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

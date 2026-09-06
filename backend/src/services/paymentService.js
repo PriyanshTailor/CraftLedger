@@ -13,7 +13,7 @@ import { createJournalEntry, postJournalEntry } from './accountingService.js';
 const getStandardAccount = async (businessId, type, keywords, session) => {
   const query = { businessId, accountType: type };
   // Find an account containing keywords (e.g., 'Cash', 'Bank', 'Receivable', 'Payable')
-  const accounts = await Account.find(query).session(session);
+  const accounts = await Account.find(query);
   
   const match = accounts.find(a => 
     keywords.some(k => a.accountName.toLowerCase().includes(k.toLowerCase()) || 
@@ -25,10 +25,10 @@ const getStandardAccount = async (businessId, type, keywords, session) => {
 };
 
 const getJournal = async (businessId, type, session) => {
-  let journal = await Journal.findOne({ businessId, journalType: type }).session(session);
+  let journal = await Journal.findOne({ businessId, journalType: type });
   if (!journal) {
     // Fallback to general journal
-    journal = await Journal.findOne({ businessId, journalType: 'general' }).session(session);
+    journal = await Journal.findOne({ businessId, journalType: 'general' });
   }
   return journal;
 };
@@ -36,7 +36,7 @@ const getJournal = async (businessId, type, session) => {
 export const processCustomerPayment = async (businessId, userId, data, session) => {
   const { invoiceId, amount, paymentMethod, referenceNumber, notes, paymentDate } = data;
 
-  const invoice = await CustomerInvoice.findOne({ _id: invoiceId, businessId }).session(session);
+  const invoice = await CustomerInvoice.findOne({ _id: invoiceId, businessId });
   if (!invoice) throw new Error('Invoice not found');
   if (invoice.status === 'cancelled') throw new Error('Cannot pay a cancelled invoice');
   if (amount > invoice.balanceDue) throw new Error(`Payment amount (${amount}) exceeds balance due (${invoice.balanceDue})`);
@@ -54,19 +54,19 @@ export const processCustomerPayment = async (businessId, userId, data, session) 
     notes,
     paymentDate: paymentDate || Date.now(),
     createdBy: userId
-  }], { session });
+  }]);
 
   // Update invoice
   invoice.paidAmount += amount;
   invoice.balanceDue -= amount;
   invoice.status = invoice.balanceDue === 0 ? 'paid' : 'partially_paid';
-  await invoice.save({ session });
+  await invoice.save();
 
   // Update Sales Order payment status
-  const order = await SalesOrder.findById(invoice.salesOrderId).session(session);
+  const order = await SalesOrder.findById(invoice.salesOrderId);
   if (order) {
     order.paymentStatus = invoice.status === 'paid' ? 'paid' : 'partially_paid';
-    await order.save({ session });
+    await order.save();
   }
 
   // Auto Journal Entry
@@ -111,7 +111,7 @@ export const processCustomerPayment = async (businessId, userId, data, session) 
 export const processVendorPayment = async (businessId, userId, data, session) => {
   const { billId, amount, paymentMethod, referenceNumber, notes, paymentDate } = data;
 
-  const bill = await VendorBill.findOne({ _id: billId, businessId }).session(session);
+  const bill = await VendorBill.findOne({ _id: billId, businessId });
   if (!bill) throw new Error('Bill not found');
   if (bill.status === 'cancelled') throw new Error('Cannot pay a cancelled bill');
   if (amount > bill.balanceDue) throw new Error(`Payment amount (${amount}) exceeds balance due (${bill.balanceDue})`);
@@ -129,19 +129,19 @@ export const processVendorPayment = async (businessId, userId, data, session) =>
     notes,
     paymentDate: paymentDate || Date.now(),
     createdBy: userId
-  }], { session });
+  }]);
 
   // Update bill
   bill.paidAmount += amount;
   bill.balanceDue -= amount;
   bill.status = bill.balanceDue === 0 ? 'paid' : 'partially_paid';
-  await bill.save({ session });
+  await bill.save();
 
   // Update Purchase Order
-  const order = await PurchaseOrder.findById(bill.purchaseOrderId).session(session);
+  const order = await PurchaseOrder.findById(bill.purchaseOrderId);
   if (order) {
     order.paymentStatus = bill.status === 'paid' ? 'paid' : 'partially_paid';
-    await order.save({ session });
+    await order.save();
   }
 
   // Auto Journal Entry

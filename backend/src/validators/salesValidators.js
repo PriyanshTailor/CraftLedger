@@ -8,6 +8,7 @@ const salesOrderItemSchema = z.object({
 
 export const createSalesOrderSchema = z.object({
   customerId: z.string().min(1, 'Customer ID is required'),
+  orderDate: z.string().min(1, 'Order date is required').optional(),
   expectedDeliveryDate: z.string().optional(),
   items: z.array(salesOrderItemSchema).min(1, 'At least one item is required'),
   discount: z.number().min(0, 'Order discount cannot be negative').default(0),

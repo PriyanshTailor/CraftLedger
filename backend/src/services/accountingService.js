@@ -47,20 +47,20 @@ export const createJournalEntry = async (businessId, entryData, session) => {
     entryNumber,
     totalDebit,
     totalCredit
-  }], { session });
+  }]);
 
   return entry[0];
 };
 
 export const postJournalEntry = async (entryId, businessId, session) => {
-  const entry = await JournalEntry.findOne({ _id: entryId, businessId }).session(session);
+  const entry = await JournalEntry.findOne({ _id: entryId, businessId });
   if (!entry) throw new Error('Journal entry not found');
   if (entry.status === 'posted') throw new Error('Entry is already posted');
   if (entry.status === 'reversed') throw new Error('Cannot post a reversed entry');
 
   // Verify accounts and update their balances
   for (const line of entry.lines) {
-    const account = await Account.findOne({ _id: line.accountId, businessId }).session(session);
+    const account = await Account.findOne({ _id: line.accountId, businessId });
     if (!account) throw new Error(`Account ${line.accountId} not found`);
 
     // Debit increases assets and expenses. Credit increases liabilities, equity, and income.
@@ -72,16 +72,16 @@ export const postJournalEntry = async (entryId, businessId, session) => {
     }
 
     account.currentBalance += balanceChange;
-    await account.save({ session });
+    await account.save();
   }
 
   entry.status = 'posted';
-  await entry.save({ session });
+  await entry.save();
   return entry;
 };
 
 export const reverseJournalEntry = async (entryId, businessId, userId, session) => {
-  const originalEntry = await JournalEntry.findOne({ _id: entryId, businessId }).session(session);
+  const originalEntry = await JournalEntry.findOne({ _id: entryId, businessId });
   if (!originalEntry) throw new Error('Journal entry not found');
   if (originalEntry.status !== 'posted') throw new Error('Only posted entries can be reversed');
 
@@ -108,7 +108,7 @@ export const reverseJournalEntry = async (entryId, businessId, userId, session) 
   await postJournalEntry(reversalEntry._id, businessId, session);
 
   originalEntry.status = 'reversed';
-  await originalEntry.save({ session });
+  await originalEntry.save();
 
   return reversalEntry;
 };

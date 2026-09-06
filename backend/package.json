@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "seed:demo-users": "node src/seed/seedDemoUsers.js"
+    "seed:demo-users": "node src/seed/seedDemoUsers.js",
+    "seed:cashflow": "node src/seed/seedCashFlowData.js",
+    "seed:ecosystem": "node src/seed/seedMultiCompanyEcosystem.js"
   },
   "keywords": [],
   "author": "",

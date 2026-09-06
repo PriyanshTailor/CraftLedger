@@ -7,6 +7,7 @@ const purchaseOrderItemSchema = z.object({
 
 export const createPurchaseOrderSchema = z.object({
   vendorId: z.string().min(1, 'Vendor ID is required'),
+  orderDate: z.string().min(1, 'Order date is required').optional(),
   expectedDeliveryDate: z.string().optional(),
   items: z.array(purchaseOrderItemSchema).min(1, 'At least one item is required'),
   notes: z.string().optional()

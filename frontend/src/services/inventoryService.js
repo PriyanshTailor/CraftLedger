@@ -9,5 +9,6 @@ export const inventoryService = {
   getAdjustments: () => api.get('/inventory/adjustments'),
   getLowStock: () => api.get('/inventory/low-stock'),
   getValuation: () => api.get('/inventory/valuation'),
-  getProfitability: () => api.get('/inventory/profitability')
+  getProfitability: () => api.get('/inventory/profitability'),
+  getSlowMoving: (params) => api.get('/inventory/slow-moving', { params })
 };

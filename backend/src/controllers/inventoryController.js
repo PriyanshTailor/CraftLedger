@@ -5,21 +5,24 @@ import InventoryAdjustment from '../models/InventoryAdjustment.js';
 import SalesOrder from '../models/SalesOrder.js';
 import { generateNextNumber } from '../utils/numberGenerator.js';
 import { sendSuccess, sendError } from '../utils/response.js';
+import { calculateSlowMovingInventory } from '../services/slowMovingInventoryService.js';
 
 export const getInventoryOverview = async (req, res, next) => {
   try {
     const businessId = req.user.businessId;
 
     const products = await Product.find({ businessId, isActive: true });
-    
+
     let totalValue = 0;
     let totalItems = 0;
+    let totalQuantity = 0;
     let lowStockCount = 0;
     let outOfStockCount = 0;
 
     products.forEach(p => {
       totalValue += p.inventoryValue || (p.quantityOnHand * p.costPrice);
       totalItems += 1;
+      totalQuantity += (p.quantityOnHand || 0);
       if (p.quantityOnHand <= 0) {
         outOfStockCount++;
       } else if (p.quantityOnHand <= p.reorderLevel) {
@@ -30,6 +33,8 @@ export const getInventoryOverview = async (req, res, next) => {
     return sendSuccess(res, 200, 'Inventory overview retrieved', {
       totalValue,
       totalItems,
+      totalProducts: totalItems,
+      totalQuantity,
       lowStockCount,
       outOfStockCount
     });
@@ -43,7 +48,7 @@ export const getInventoryProducts = async (req, res, next) => {
     const products = await Product.find({ businessId: req.user.businessId, isActive: true })
       .populate('categoryId', 'name')
       .sort('name');
-    
+
     return sendSuccess(res, 200, 'Inventory products retrieved', products);
   } catch (error) {
     next(error);
@@ -54,9 +59,9 @@ export const getInventoryProductById = async (req, res, next) => {
   try {
     const product = await Product.findOne({ _id: req.params.id, businessId: req.user.businessId })
       .populate('categoryId', 'name');
-    
+
     if (!product) return sendError(res, 404, 'Product not found');
-    
+
     return sendSuccess(res, 200, 'Product retrieved', product);
   } catch (error) {
     next(error);
@@ -65,13 +70,13 @@ export const getInventoryProductById = async (req, res, next) => {
 
 export const getProductMovements = async (req, res, next) => {
   try {
-    const movements = await StockMovement.find({ 
-      productId: req.params.id, 
-      businessId: req.user.businessId 
+    const movements = await StockMovement.find({
+      productId: req.params.id,
+      businessId: req.user.businessId
     })
     .populate('createdBy', 'name')
     .sort('-createdAt');
-    
+
     return sendSuccess(res, 200, 'Stock movements retrieved', movements);
   } catch (error) {
     next(error);
@@ -79,8 +84,6 @@ export const getProductMovements = async (req, res, next) => {
 };
 
 export const createAdjustment = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     const { items, notes, date, status = 'draft' } = req.body;
@@ -100,10 +103,10 @@ export const createAdjustment = async (req, res, next) => {
       notes,
       createdBy: req.user._id,
       approvedBy: status === 'approved' ? req.user._id : null
-    }], { session });
+    }]);
 
     for (const item of items) {
-      const product = await Product.findOne({ _id: item.productId, businessId }).session(session);
+      const product = await Product.findOne({ _id: item.productId, businessId });
       if (!product) throw new Error(`Product ${item.productId} not found`);
 
       const previousQuantity = product.quantityOnHand;
@@ -113,7 +116,7 @@ export const createAdjustment = async (req, res, next) => {
       if (item.adjustmentType === 'increase') {
         newQuantity += item.quantity;
         totalValueChange += valueChange;
-        
+
         // Basic weighted average cost calculation
         const totalExistingValue = previousQuantity * product.costPrice;
         const totalNewValue = item.quantity * item.unitCost;
@@ -124,7 +127,7 @@ export const createAdjustment = async (req, res, next) => {
       } else {
         newQuantity -= item.quantity;
         totalValueChange -= valueChange;
-        
+
         if (newQuantity < 0) {
           throw new Error(`Cannot decrease stock below 0 for product ${product.name}`);
         }
@@ -134,7 +137,7 @@ export const createAdjustment = async (req, res, next) => {
       if (status === 'approved') {
         product.quantityOnHand = newQuantity;
         product.inventoryValue = newQuantity * product.costPrice;
-        await product.save({ session });
+        await product.save();
 
         await StockMovement.create([{
           businessId,
@@ -149,21 +152,17 @@ export const createAdjustment = async (req, res, next) => {
           referenceId: adjustment[0]._id,
           notes: item.reason,
           createdBy: req.user._id
-        }], { session });
+        }]);
       }
     }
 
     adjustment[0].totalValueChange = totalValueChange;
-    await adjustment[0].save({ session });
+    await adjustment[0].save();
 
-    await session.commitTransaction();
-    session.endSession();
 
     return sendSuccess(res, 201, `Inventory adjustment ${status}`, adjustment[0]);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return sendError(res, 400, error.message);
+            return sendError(res, 400, error.message);
   }
 };
 
@@ -183,12 +182,12 @@ export const getLowStockProducts = async (req, res, next) => {
   try {
     // MongoDB trick: compare quantityOnHand with reorderLevel
     // Since reorderLevel might be 0, we use $expr
-    const products = await Product.find({ 
+    const products = await Product.find({
       businessId: req.user.businessId,
       isActive: true,
       $expr: { $lte: ["$quantityOnHand", "$reorderLevel"] }
     }).populate('categoryId', 'name').sort('quantityOnHand');
-    
+
     return sendSuccess(res, 200, 'Low stock products retrieved', products);
   } catch (error) {
     next(error);
@@ -200,7 +199,7 @@ export const getValuation = async (req, res, next) => {
     const products = await Product.find({ businessId: req.user.businessId, isActive: true, quantityOnHand: { $gt: 0 } })
       .populate('categoryId', 'name')
       .sort('-inventoryValue');
-    
+
     const totalValuation = products.reduce((sum, p) => sum + (p.inventoryValue || (p.quantityOnHand * p.costPrice)), 0);
 
     return sendSuccess(res, 200, 'Inventory valuation retrieved', { totalValuation, products });
@@ -213,13 +212,13 @@ export const getProfitability = async (req, res, next) => {
   try {
     const products = await Product.find({ businessId: req.user.businessId, isActive: true })
       .populate('categoryId', 'name');
-    
-    // Aggregate historical sales logic could be complex. For a quick profitability 
+
+    // Aggregate historical sales logic could be complex. For a quick profitability
     // metric based on current prices, we calculate theoretical margins.
     const profitability = products.map(p => {
       const margin = p.sellingPrice - p.costPrice;
       const marginPercentage = p.sellingPrice > 0 ? (margin / p.sellingPrice) * 100 : 0;
-      
+
       return {
         _id: p._id,
         name: p.name,
@@ -235,6 +234,23 @@ export const getProfitability = async (req, res, next) => {
     profitability.sort((a, b) => b.marginPercentage - a.marginPercentage);
 
     return sendSuccess(res, 200, 'Profitability metrics retrieved', profitability);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getSlowMovingInventory = async (req, res, next) => {
+  try {
+    const businessId = req.user.businessId;
+    const { horizonDays, holdingCostRate, categoryId, classification, search } = req.query;
+    const result = await calculateSlowMovingInventory(businessId, {
+      horizonDays,
+      holdingCostRate,
+      categoryId,
+      classification,
+      search
+    });
+    return sendSuccess(res, 200, 'Slow-moving inventory analysis retrieved successfully', result);
   } catch (error) {
     next(error);
   }

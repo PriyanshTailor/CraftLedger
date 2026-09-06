@@ -36,7 +36,7 @@ export const getAllPayments = async (req, res, next) => {
       CustomerPayment.find({ businessId: req.user.businessId }).lean(),
       VendorPayment.find({ businessId: req.user.businessId }).lean()
     ]);
-    
+
     const all = [
       ...custPayments.map(p => ({ ...p, type: 'CustomerPayment' })),
       ...vendPayments.map(p => ({ ...p, type: 'VendorPayment' }))
@@ -49,44 +49,32 @@ export const getAllPayments = async (req, res, next) => {
 };
 
 export const createCustomerPayment = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     const payment = await processCustomerPayment(req.user.businessId, req.user._id, req.body, session);
-    
-    await session.commitTransaction();
-    session.endSession();
+
 
     return sendSuccess(res, 201, 'Customer payment recorded successfully', payment);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return sendError(res, 400, error.message);
+            return sendError(res, 400, error.message);
   }
 };
 
 export const createVendorPayment = async (req, res, next) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
     const payment = await processVendorPayment(req.user.businessId, req.user._id, req.body, session);
-    
-    await session.commitTransaction();
-    session.endSession();
+
 
     return sendSuccess(res, 201, 'Vendor payment recorded successfully', payment);
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    return sendError(res, 400, error.message);
+            return sendError(res, 400, error.message);
   }
 };
 
 export const getOutstandingReceivables = async (req, res, next) => {
   try {
-    const invoices = await CustomerInvoice.find({ 
+    const invoices = await CustomerInvoice.find({
       businessId: req.user.businessId,
       status: { $in: ['issued', 'partially_paid', 'overdue'] }
     }).populate('customerId', 'name');
@@ -104,7 +92,7 @@ export const getOutstandingReceivables = async (req, res, next) => {
 
 export const getOutstandingPayables = async (req, res, next) => {
   try {
-    const bills = await VendorBill.find({ 
+    const bills = await VendorBill.find({
       businessId: req.user.businessId,
       status: { $in: ['issued', 'partially_paid', 'overdue'] }
     }).populate('vendorId', 'name');
@@ -149,7 +137,7 @@ export const getCashSummary = async (req, res, next) => {
 export const getBankSummary = async (req, res, next) => {
   try {
     const bankMethods = ['bank_transfer', 'UPI', 'cheque', 'card'];
-    
+
     const [custBank, vendBank] = await Promise.all([
       CustomerPayment.aggregate([
         { $match: { businessId: req.user.businessId, paymentMethod: { $in: bankMethods } } },

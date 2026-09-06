@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -27,7 +28,15 @@ function AddProductModal({ isOpen, onClose, onRefresh }) {
 
   useEffect(() => {
     if (isOpen) {
-      masterDataService.getCategories().then(res => setCategories(res.data)).catch(console.error);
+      masterDataService.getCategories()
+        .then(res => {
+          const list = Array.isArray(res?.data) ? res.data : (res?.data?.docs || []);
+          setCategories(list);
+        })
+        .catch(err => {
+          console.error('Failed to load categories:', err);
+          setCategories([]);
+        });
     }
   }, [isOpen]);
 
@@ -44,7 +53,20 @@ function AddProductModal({ isOpen, onClose, onRefresh }) {
     setLoading(true);
     setError('');
     try {
-      await masterDataService.createProduct(formData);
+      const payload = {
+        name: formData.name.trim(),
+        sku: formData.sku.trim().toUpperCase(),
+        costPrice: Number(formData.costPrice) || 0,
+        sellingPrice: Number(formData.sellingPrice) || 0,
+        quantityOnHand: Number(formData.quantityOnHand) || 0,
+        reorderLevel: Number(formData.reorderLevel) || 0,
+        unit: formData.unitOfMeasure || 'units',
+        description: formData.description?.trim() || undefined
+      };
+      if (formData.categoryId && formData.categoryId.trim() !== '') {
+        payload.categoryId = formData.categoryId;
+      }
+      await masterDataService.createProduct(payload);
       onRefresh();
       onClose();
     } catch (err) {
@@ -68,12 +90,12 @@ function AddProductModal({ isOpen, onClose, onRefresh }) {
           </FormField>
           <FormField label="Category">
             <Select name="categoryId" value={formData.categoryId} onChange={handleChange}>
-              <option value="">Select category</option>
-              {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+              <option value="">Select category (optional)</option>
+              {(Array.isArray(categories) ? categories : []).map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
             </Select>
           </FormField>
-          <FormField label="SKU / Product Code">
-            <Input name="sku" value={formData.sku} onChange={handleChange} required placeholder="e.g. CHAIR-ERG-001" />
+          <FormField label="SKU / Product Code" required>
+            <Input name="sku" value={formData.sku} onChange={handleChange} required placeholder="e.g. CHAIR-ERG-001" className="uppercase font-mono text-sm" />
           </FormField>
           <FormField label="Purchase Cost (₹)" required>
             <Input name="costPrice" type="number" min="0" value={formData.costPrice} onChange={handleChange} required />
@@ -94,14 +116,28 @@ function AddProductModal({ isOpen, onClose, onRefresh }) {
         </FormField>
 
         {/* Margin preview */}
-        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-          <p className="text-xs font-semibold text-royal uppercase tracking-wide mb-2">Margin Preview</p>
-          <p className="text-sm text-slate-600">Expected Gross Margin: <strong className={margin < 15 ? 'text-red-600' : 'text-green-600'}>{margin}%</strong></p>
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Gross Margin Preview</p>
+            <p className="text-sm text-slate-600 mt-0.5">Calculated margin on sales</p>
+          </div>
+          <span className={cn('text-sm font-bold px-2.5 py-1 rounded-full', margin < 15 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800')}>
+            {margin}%
+          </span>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button type="submit" disabled={loading}>{loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null} Add Product</Button>
+        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <Link
+            to="/dashboard/inventory/new"
+            onClick={onClose}
+            className="text-xs text-royal hover:underline font-medium"
+          >
+            Open full-page form ↗
+          </Link>
+          <div className="flex items-center gap-3">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+            <Button type="submit" disabled={loading}>{loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null} Add Product</Button>
+          </div>
         </div>
       </form>
     </Modal>
@@ -148,7 +184,15 @@ export function Inventory() {
           <h2 className="text-2xl font-bold text-navy mb-1">Inventory Intelligence</h2>
           <p className="text-slate-500">Monitor stock levels, valuation, and movement.</p>
         </div>
-        <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Add Product</Button>
+        <div className="flex items-center gap-3">
+          <Button asChild variant="outline" className="border-amber-200 text-amber-800 hover:bg-amber-50 shadow-xs">
+            <Link to="/dashboard/inventory/slow-moving">
+              <AlertTriangle className="w-4 h-4 mr-2 text-amber-600" />
+              Slow-Moving Prediction
+            </Link>
+          </Button>
+          <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Add Product</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

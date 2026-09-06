@@ -9,14 +9,26 @@ import { ROLES } from '../../lib/roles';
 
 export function Login() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, defaultPath } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
   const [formData, setFormData] = useState({ email: '', password: '' });
 
+  // If already authenticated, redirect to destination
+  React.useEffect(() => {
+    if (isAuthenticated && defaultPath) {
+      navigate(defaultPath, { replace: true });
+    }
+  }, [isAuthenticated, defaultPath, navigate]);
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleQuickFill = (email, password) => {
+    setFormData({ email, password });
+    setError('');
   };
 
   const handleSubmit = async (e) => {
@@ -45,6 +57,12 @@ export function Login() {
     }
   };
 
+  const demoAccounts = [
+    { label: 'Business Owner', email: 'vidhitrivedi3110@gmail.com', pass: '123456', color: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100' },
+    { label: 'Accountant', email: 'aarav.accountant@craftledger.demo', pass: 'Demo@123', color: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' },
+    { label: 'Customer', email: 'amber.customer@craftledger.demo', pass: 'Demo@123', color: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' },
+  ];
+
   return (
     <AuthLayout title="Welcome back" subtitle="Enter your credentials to access your account.">
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -67,15 +85,32 @@ export function Login() {
             placeholder="••••••••" />
         </div>
 
-        <Button type="submit" className="w-full mt-4 h-11 bg-royal hover:bg-blue-700 text-white font-medium" disabled={isLoading}>
+        <Button type="submit" className="w-full mt-4 h-11 bg-royal hover:bg-blue-700 text-white font-medium shadow-md shadow-royal/20" disabled={isLoading}>
           {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
           {isLoading ? 'Signing in...' : 'Sign In'}
         </Button>
-        
-        <p className="text-center mt-6 text-sm text-slate-500">
-          Need an account? Ask your business owner to send you an invitation.
-        </p>
       </form>
+
+      {/* Quick Demo Fill Helper */}
+      <div className="mt-6 pt-5 border-t border-slate-200/80">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Quick Test Credentials</span>
+          <span className="text-[11px] text-slate-400">Click to fill</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {demoAccounts.map(account => (
+            <button
+              key={account.email}
+              type="button"
+              onClick={() => handleQuickFill(account.email, account.pass)}
+              className={`p-2 rounded-lg border text-left transition-all ${account.color}`}
+            >
+              <div className="text-xs font-bold leading-tight">{account.label}</div>
+              <div className="text-[10px] opacity-75 truncate">{account.email}</div>
+            </button>
+          ))}
+        </div>
+      </div>
     </AuthLayout>
   );
 }

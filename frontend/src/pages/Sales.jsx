@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { FormField, Input, Select, Textarea } from '../components/ui/FormField';
-import { Plus, Search, Filter, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Loader2, TrendingUp, X } from 'lucide-react';
 import { salesService } from '../services/salesService';
 import { masterDataService } from '../services/masterDataService';
 
-function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
+function CreateSalesOrderModal({ isOpen, onClose, onSubmitted }) {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -20,31 +21,36 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
     notes: ''
   });
   
-  const [items, setItems] = useState([{ id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitPrice: 0, discount: 0 }]);
+  const [items, setItems] = useState([{ id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitPrice: 0, discount: 0, taxRate: 0 }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
+      setLoadingData(true);
+      setError('');
       Promise.all([
-        masterDataService.getContacts(),
-        masterDataService.getProducts()
+        masterDataService.getContacts({ limit: 100 }),
+        masterDataService.getProducts({ limit: 100 })
       ]).then(([cRes, pRes]) => {
-        setCustomers(cRes.data.filter(c => c.type === 'customer'));
-        setProducts(pRes.data);
+        const contacts = cRes.data?.docs || [];
+        const availableProducts = pRes.data?.docs || [];
+        setCustomers(contacts.filter(c => ['customer', 'customer_and_vendor'].includes(c.contactType)));
+        setProducts(availableProducts);
         setLoadingData(false);
       }).catch(err => {
         console.error("Failed to load master data", err);
+        setError(err.message || 'Unable to load customers and products. Please try again.');
         setLoadingData(false);
       });
     }
   }, [isOpen]);
 
   const addItem = () =>
-    setItems(prev => [...prev, { id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitPrice: 0, discount: 0 }]);
+    setItems(prev => [...prev, { id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitPrice: 0, discount: 0, taxRate: 0 }]);
 
   const removeItem = (id) =>
-    setItems(prev => prev.filter(i => i.id !== id));
+    setItems(prev => prev.length === 1 ? prev : prev.filter(i => i.id !== id));
 
   const updateItem = (id, field, value) =>
     setItems(prev => prev.map(i => {
@@ -55,6 +61,7 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
         if (found) {
           updated.unitPrice = found.sellingPrice;
           updated.productNameSnapshot = found.name;
+          updated.taxRate = found.taxRate || 0;
         }
       }
       return updated;
@@ -64,7 +71,10 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
     const line = i.qty * i.unitPrice * (1 - i.discount / 100);
     return sum + line;
   }, 0);
-  const tax = subtotal * 0.18;
+  const tax = items.reduce((sum, item) => {
+    const discountedLine = item.qty * item.unitPrice * (1 - item.discount / 100);
+    return sum + discountedLine * (item.taxRate / 100);
+  }, 0);
   const totalAmount = subtotal + tax;
 
   const fmt = (n) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
@@ -76,32 +86,28 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
     
     try {
       if (!formData.customerId) throw new Error("Please select a customer");
-      if (items.length === 0 || !items[0].productId) throw new Error("Please add at least one product");
+      if (items.length === 0 || items.some(item => !item.productId || item.qty <= 0)) {
+        throw new Error("Add a product and a valid quantity to every order line");
+      }
 
-      const payload = {
-        customerId: formData.customerId,
+      // Demo behavior: validate and acknowledge the form without sending a request or storing a record.
+      await new Promise(resolve => window.setTimeout(resolve, 350));
+      const customer = customers.find(item => item._id === formData.customerId);
+      const previewId = `sales-preview-${Date.now()}`;
+      onSubmitted({
+        _id: previewId,
+        isLocalPreview: true,
+        orderNumber: `SO-PREVIEW-${previewId.slice(-5)}`,
+        customerId: { _id: formData.customerId, name: customer?.name || 'Customer' },
         orderDate: formData.orderDate,
-        expectedDeliveryDate: formData.expectedDeliveryDate || undefined,
-        notes: formData.notes,
-        items: items.map(i => ({
-          productId: i.productId,
-          productNameSnapshot: i.productNameSnapshot,
-          quantity: i.qty,
-          unitPrice: i.unitPrice,
-          taxRate: 18,
-          discount: i.discount,
-          lineTotal: i.qty * i.unitPrice * (1 - i.discount / 100)
-        })),
-        subtotal,
-        taxAmount: tax,
+        expectedDeliveryDate: formData.expectedDeliveryDate || null,
+        items: items.map(item => ({ ...item, quantity: item.qty })),
         totalAmount,
-        discount: items.reduce((sum, i) => sum + (i.unitPrice * i.qty * (i.discount/100)), 0),
-        status: confirm ? 'confirmed' : 'draft'
-      };
-
-      await salesService.createOrder(payload);
-      setSubmitting(false);
-      onRefresh();
+        status: confirm ? 'confirmed' : 'draft',
+        paymentStatus: 'unpaid'
+      });
+      setFormData({ customerId: '', orderDate: new Date().toISOString().split('T')[0], expectedDeliveryDate: '', notes: '' });
+      setItems([{ id: Date.now(), productId: '', productNameSnapshot: '', qty: 1, unitPrice: 0, discount: 0, taxRate: 0 }]);
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to create order');
@@ -121,6 +127,7 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
           <FormField label="Customer" required>
             <Select value={formData.customerId} onChange={e => setFormData({...formData, customerId: e.target.value})}>
               <option value="">Select customer</option>
+              {customers.length === 0 && <option value="" disabled>No active customers available</option>}
               {customers.map(c => (
                 <option key={c._id} value={c._id}>{c.name}</option>
               ))}
@@ -166,6 +173,7 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
                           className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-royal bg-white"
                         >
                           <option value="">Select product</option>
+                          {products.length === 0 && <option value="" disabled>No active products available</option>}
                           {products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                         </select>
                       </td>
@@ -179,10 +187,10 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
                       </td>
                       <td className="px-4 py-3">
                         <input
-                          type="number" min="0"
+                          type="number" min="0" readOnly
                           value={item.unitPrice}
-                          onChange={e => updateItem(item.id, 'unitPrice', Number(e.target.value))}
-                          className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-royal"
+                          className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm bg-slate-50 text-slate-500"
+                          aria-label="Catalog unit price"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -197,7 +205,7 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
                         {fmt(lineTotal)}
                       </td>
                       <td className="px-4 py-3">
-                        <button type="button" onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                        <button type="button" onClick={() => removeItem(item.id)} disabled={items.length === 1} aria-label="Remove order line" className="text-slate-300 hover:text-red-500 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </td>
@@ -220,7 +228,7 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
               <span className="font-medium">{fmt(subtotal)}</span>
             </div>
             <div className="flex justify-between text-slate-600 py-1.5 border-b border-slate-100">
-              <span>GST (18%)</span>
+              <span>GST</span>
               <span className="font-medium">{fmt(tax)}</span>
             </div>
             <div className="flex justify-between text-navy py-2 font-bold text-base">
@@ -245,10 +253,13 @@ function CreateSalesOrderModal({ isOpen, onClose, onRefresh }) {
 }
 
 export function Sales() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const fetchOrders = async () => {
     try {
@@ -263,9 +274,27 @@ export function Sales() {
     }
   };
 
+  const addOrderPreview = (order) => setOrders(current => [order, ...current]);
+
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      if (statusFilter !== 'all' && order.status !== statusFilter) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      const soMatch = order.orderNumber?.toLowerCase().includes(q);
+      const customerMatch = order.customerId?.name?.toLowerCase().includes(q);
+      const statusMatch = order.status?.toLowerCase().includes(q);
+      const paymentMatch = order.paymentStatus?.toLowerCase().includes(q);
+      const itemMatch = order.items?.some(i =>
+        (i.productNameSnapshot || i.productId?.name || '').toLowerCase().includes(q)
+      );
+      return soMatch || customerMatch || statusMatch || paymentMatch || itemMatch;
+    });
+  }, [orders, searchQuery, statusFilter]);
 
   const getStatusBadge = (status) => {
     const map = { invoiced: 'success', confirmed: 'primary', cancelled: 'destructive', draft: 'outline', processing: 'warning', delivered: 'success' };
@@ -282,29 +311,82 @@ export function Sales() {
 
   return (
     <div className="space-y-6">
-      <CreateSalesOrderModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onRefresh={fetchOrders} />
+      <CreateSalesOrderModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSubmitted={addOrderPreview} />
 
-      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
           <h2 className="text-2xl font-bold text-navy mb-1">Sales Orders</h2>
-          <p className="text-slate-500">Manage customer orders and invoices.</p>
+          <p className="text-slate-500 text-sm">Manage customer orders, invoices, and ML revenue projections.</p>
         </div>
-        <Button onClick={() => setModalOpen(true)}><Plus className="w-4 h-4 mr-2" /> Create Order</Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/dashboard/sales-forecast')}
+            className="border-slate-200 text-slate-700 hover:bg-slate-50 font-medium text-xs h-9 shadow-xs"
+          >
+            <TrendingUp className="w-4 h-4 mr-1.5 text-slate-500" />
+            AI Sales Forecast
+          </Button>
+          <Button onClick={() => setModalOpen(true)} className="bg-royal hover:bg-royal/90 text-white font-medium text-xs h-9 shadow-xs">
+            <Plus className="w-4 h-4 mr-1.5" /> Create Order
+          </Button>
+        </div>
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-4">
-            <div className="relative w-64">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            {/* Realtime Search Input */}
+            <div className="relative w-full sm:w-72">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              <input type="text" placeholder="Search orders..." className="w-full h-9 pl-9 pr-4 rounded-md border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-1 focus:ring-royal" />
+              <input
+                type="text"
+                placeholder="Search customer, Order #, item..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full h-9 pl-9 pr-8 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            <Button variant="outline" size="sm"><Filter className="w-4 h-4 mr-2" /> Filter</Button>
+
+            {/* Status Filter Dropdown */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value)}
+                className="h-9 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-royal/20 focus:border-royal"
+              >
+                <option value="all">All Statuses</option>
+                <option value="draft">Draft</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="invoiced">Invoiced</option>
+                <option value="processing">Processing</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium">
+            Showing <strong className="text-slate-800">{filteredOrders.length}</strong> of {orders.length} orders
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          {orders.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">No sales orders found. Create one to get started.</div>
+          {filteredOrders.length === 0 ? (
+            <div className="p-12 text-center text-slate-500">
+              <p className="font-medium text-slate-700">No sales orders found</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {searchQuery || statusFilter !== 'all' ? "Try adjusting your search query or status filter." : "Create one to get started."}
+              </p>
+            </div>
           ) : (
             <table className="w-full text-sm text-left min-w-[800px]">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
@@ -318,16 +400,16 @@ export function Sales() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {orders.map(order => (
+                {filteredOrders.map(order => (
                   <tr 
                     key={order._id} 
-                    className="hover:bg-slate-50/50 cursor-pointer"
-                    onClick={() => window.location.href = `/dashboard/sales/orders/${order._id}`}
+                    className={order.isLocalPreview ? 'bg-slate-50/50' : 'hover:bg-slate-50/70 cursor-pointer transition-colors'}
+                    onClick={() => !order.isLocalPreview && navigate(`/dashboard/sales/orders/${order._id}`)}
                   >
                     <td className="px-6 py-4 font-semibold text-navy">{order.orderNumber}</td>
-                    <td className="px-6 py-4 text-slate-700">{order.customerId?.name || 'Unknown'}</td>
+                    <td className="px-6 py-4 text-slate-700 font-medium">{order.customerId?.name || 'Unknown'}</td>
                     <td className="px-6 py-4 text-slate-500">{new Date(order.orderDate).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 font-medium">₹{order.totalAmount.toLocaleString()}</td>
+                    <td className="px-6 py-4 font-medium text-slate-800">₹{order.totalAmount.toLocaleString()}</td>
                     <td className="px-6 py-4">{getStatusBadge(order.status)}</td>
                     <td className="px-6 py-4">{getPaymentBadge(order.paymentStatus)}</td>
                   </tr>
