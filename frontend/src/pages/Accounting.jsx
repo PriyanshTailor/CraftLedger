@@ -37,7 +37,7 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
 
   const totalDebit = lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
   const totalCredit = lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
-  const balanced = totalDebit === totalCredit && totalDebit > 0;
+  const balanced = Math.abs(totalDebit - totalCredit) < 0.005 && totalDebit > 0;
   const fmt = n => `₹${n.toLocaleString('en-IN')}`;
 
   const handleSubmit = async (e) => {
@@ -136,12 +136,12 @@ function CreateJournalEntryModal({ isOpen, onClose, onRefresh, accounts, journal
                         placeholder="Description" className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-royal" />
                     </td>
                     <td className="px-4 py-3">
-                      <input type="number" min="0" value={line.debit} onChange={e => updateLine(line.id, 'debit', e.target.value)} disabled={line.credit > 0}
-                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal disabled:bg-slate-50 disabled:text-slate-400" />
+                      <input type="number" min="0" step="0.01" value={line.debit} onChange={e => updateLine(line.id, 'debit', e.target.value)}
+                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal" />
                     </td>
                     <td className="px-4 py-3">
-                      <input type="number" min="0" value={line.credit} onChange={e => updateLine(line.id, 'credit', e.target.value)} disabled={line.debit > 0}
-                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal disabled:bg-slate-50 disabled:text-slate-400" />
+                      <input type="number" min="0" step="0.01" value={line.credit} onChange={e => updateLine(line.id, 'credit', e.target.value)}
+                        className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-sm text-right focus:outline-none focus:ring-1 focus:ring-royal" />
                     </td>
                     <td className="px-4 py-3">
                       <button type="button" onClick={() => removeLine(line.id)} className="text-slate-300 hover:text-red-500 transition-colors">
